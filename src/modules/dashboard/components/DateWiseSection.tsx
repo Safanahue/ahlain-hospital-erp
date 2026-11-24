@@ -33,7 +33,6 @@ import {
 import {
   ACTIVITY_KIND_OPTIONS,
   type ActivityKind,
-  type ActivityRow,
   getCalendarCounts,
   getDateWiseActivities,
   getRangeKindCounts,
