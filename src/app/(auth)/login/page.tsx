@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CheckCircle2, HeartPulse, ShieldCheck, Sparkles } from "lucide-react";
 import { getHospitalSettings } from "@/modules/billing/queries";
+import { resolveLogoUrl } from "@/modules/settings/brand";
 import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,9 @@ export default async function LoginPage() {
   const hospitalName = settings?.hospitalName?.trim() || "AHLAIN HOSPITAL";
   const tagline =
     settings?.tagline?.trim() || "New Horizons, Better Health.";
-  const logo = settings?.logoImageUrl || "/uploads/ahlain-logo.png";
+  // Uploaded logos live under /uploads (not shipped, ephemeral on hosts
+  // without a disk). resolveLogoUrl falls back to the bundled brand asset.
+  const logo = resolveLogoUrl(settings?.logoImageUrl);
   const addressLines = (settings?.address ?? "")
     .split("\n")
     .map((line) => line.trim())

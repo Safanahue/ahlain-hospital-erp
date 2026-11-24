@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requirePagePermission } from "@/modules/auth/guards";
 import { getOrderReport } from "@/modules/laboratory/results";
+import { resolveSignatureUrl } from "@/modules/settings/brand";
 import { getHospitalSettings } from "@/modules/billing/queries";
 import { formatDateTime } from "@/modules/shared/datetime";
 import PrintActions from "@/modules/shared/components/PrintActions";
@@ -184,10 +185,10 @@ export default async function LabReportPage({ params }: { params: Promise<{ id: 
             <div className="text-[10px] text-muted-foreground">Laboratory technician</div>
           </div>
           <div className="text-center text-[#111827]">
-            {settings.signatureImageUrl ? (
+            {resolveSignatureUrl(settings.signatureImageUrl) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={settings.signatureImageUrl}
+                src={resolveSignatureUrl(settings.signatureImageUrl)}
                 alt=""
                 className="mx-auto mb-1 h-10 w-auto max-w-[150px] object-contain"
               />

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requirePagePermission } from "@/modules/auth/guards";
 import { computeStayDays, getAdmission } from "@/modules/ip/service";
+import { resolveSignatureUrl } from "@/modules/settings/brand";
 import { getHospitalSettings } from "@/modules/billing/queries";
 import { formatDate, formatDateTime } from "@/modules/shared/datetime";
 import PrintActions from "@/modules/shared/components/PrintActions";
@@ -133,10 +134,10 @@ export default async function DischargeSummaryPage({
             <div className="text-[10px] text-muted-foreground">Treating doctor</div>
           </div>
           <div className="text-center text-[#111827]">
-            {settings.signatureImageUrl ? (
+            {resolveSignatureUrl(settings.signatureImageUrl) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={settings.signatureImageUrl}
+                src={resolveSignatureUrl(settings.signatureImageUrl)}
                 alt=""
                 className="mx-auto mb-1 h-10 w-auto max-w-[150px] object-contain"
               />

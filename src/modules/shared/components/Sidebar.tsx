@@ -11,6 +11,7 @@ import {
   type NavItem,
 } from "@/modules/shared/nav";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_PATH } from "@/modules/settings/brand";
 import {
   ChevronDown,
   ChevronRight,
@@ -175,7 +176,7 @@ export default function Sidebar({
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white p-1 shadow-xs transition-transform group-hover:scale-105">
             {!logoFailed ? (
               <img
-                src="/uploads/ahlain-logo.png"
+                src={BRAND_LOGO_PATH}
                 alt="Ahlain Hospital Logo"
                 className="h-full w-full object-contain"
                 onError={() => setLogoFailed(true)}

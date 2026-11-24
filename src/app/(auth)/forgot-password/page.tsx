@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, KeyRound, ShieldCheck, UserCog } from "lucide-react";
 import { getHospitalSettings } from "@/modules/billing/queries";
+import { resolveLogoUrl } from "@/modules/settings/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ const STEPS = [
 export default async function ForgotPasswordPage() {
   const settings = await getHospitalSettings().catch(() => null);
   const hospitalName = settings?.hospitalName?.trim() || "AHLAIN HOSPITAL";
-  const logo = settings?.logoImageUrl || "/uploads/ahlain-logo.png";
+  const logo = resolveLogoUrl(settings?.logoImageUrl);
   const contact = [settings?.phone, settings?.email]
     .map((value) => value?.trim())
     .filter(Boolean)

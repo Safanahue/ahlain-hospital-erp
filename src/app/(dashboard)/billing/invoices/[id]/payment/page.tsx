@@ -5,6 +5,7 @@ import { requirePagePermission } from "@/modules/auth/guards";
 import { getHospitalSettings, getInvoiceDetail } from "@/modules/billing/queries";
 import { formatINR } from "@/modules/shared/money";
 import PaymentScreen from "@/modules/billing/components/PaymentScreen";
+import { resolveUpiQrUrl } from "@/modules/settings/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,7 @@ export default async function CollectPaymentPage({
         settings={{
           hospitalName: settings.hospitalName,
           upiId: settings.upiId,
-          upiQrImageUrl: settings.upiQrImageUrl,
+          upiQrImageUrl: resolveUpiQrUrl(settings.upiQrImageUrl),
         }}
         collectorName={user.name}
       />

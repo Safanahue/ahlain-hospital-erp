@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { resolveLogoUrl, resolveSignatureUrl } from "@/modules/settings/brand";
 
 /** Settings shape every printed document needs. */
 export type DocumentBrandSettings = {
@@ -28,6 +29,7 @@ export function HospitalHeader({
   title?: string;
   subtitle?: string;
 }) {
+  const logoUrl = resolveLogoUrl(settings.logoImageUrl);
   const contact = [settings.phone, settings.email, settings.website]
     .map((value) => value?.trim())
     .filter(Boolean)
@@ -37,10 +39,10 @@ export function HospitalHeader({
     <header className="relative z-10">
       <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
-          {settings.logoImageUrl ? (
+          {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={settings.logoImageUrl}
+              src={logoUrl}
               alt={`${settings.hospitalName} logo`}
               className="h-20 w-auto max-w-[190px] shrink-0 object-contain"
             />
@@ -132,15 +134,16 @@ export function DocumentWatermark({
 }: {
   settings: DocumentBrandSettings;
 }) {
+  const logoUrl = resolveLogoUrl(settings.logoImageUrl);
   return (
     <div
       aria-hidden
       className="doc-watermark pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
     >
-      {settings.logoImageUrl ? (
+      {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={settings.logoImageUrl}
+          src={logoUrl}
           alt=""
           className="max-h-[55%] w-[52%] object-contain opacity-[0.04] grayscale"
         />
@@ -186,12 +189,13 @@ export function AuthorisedSignature({
   name?: string | null;
   role?: string;
 }) {
+  const signatureUrl = resolveSignatureUrl(settings.signatureImageUrl);
   return (
     <div className="relative z-10 w-56 text-center text-[10.5px] text-[#111827]">
-      {settings.signatureImageUrl ? (
+      {signatureUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={settings.signatureImageUrl}
+          src={signatureUrl}
           alt=""
           className="mx-auto mb-1 h-10 w-auto max-w-[150px] object-contain"
         />

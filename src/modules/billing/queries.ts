@@ -288,7 +288,7 @@ export async function getHospitalSettings() {
       hospitalName: "AHLAIN HOSPITAL",
       address: "",
       upiId: "ahlainhospital@upi",
-      upiQrImageUrl: "/uploads/upi-qr.png",
+      upiQrImageUrl: "/brand/upi-qr.png",
       receiptFooter: "",
       termsText: "",
       logoImageUrl: "",
