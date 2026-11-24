@@ -70,7 +70,7 @@ export async function createOpVisit(
   });
 }
 
-export async function listOpVisits(today?: Date): Promise<
+export async function listOpVisits(range?: { gte: Date; lt: Date }): Promise<
   {
     id: string;
     opNo: string;
@@ -87,10 +87,8 @@ export async function listOpVisits(today?: Date): Promise<
   }[]
 > {
   const where: { createdAt?: { gte: Date; lt: Date } } = {};
-  if (today) {
-    const startOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0));
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60_000);
-    where.createdAt = { gte: startOfDay, lt: endOfDay };
+  if (range) {
+    where.createdAt = { gte: range.gte, lt: range.lt };
   }
 
   return prisma.oPVisit.findMany({

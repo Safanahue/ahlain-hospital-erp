@@ -8,6 +8,21 @@ export const admissionListQuerySchema = z.object({
   q: z.string().trim().optional(),
   status: z.enum(["ALL", "ADMITTED", "DISCHARGED"]).optional().default("ALL"),
   ward: z.string().trim().optional(),
+  // Hospital-local admission-date range (YYYY-MM-DD), both ends inclusive.
+  from: z
+    .string()
+    .trim()
+    .regex(ISO_DATE, "Use YYYY-MM-DD")
+    .optional()
+    .or(z.literal(""))
+    .transform((value) => (value ? value : undefined)),
+  to: z
+    .string()
+    .trim()
+    .regex(ISO_DATE, "Use YYYY-MM-DD")
+    .optional()
+    .or(z.literal(""))
+    .transform((value) => (value ? value : undefined)),
 });
 
 export type AdmissionListQuery = z.infer<typeof admissionListQuerySchema>;

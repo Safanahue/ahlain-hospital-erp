@@ -3,6 +3,13 @@ import { requirePagePermission } from "@/modules/auth/guards";
 import { listOpVisits } from "@/modules/op/service";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatTime } from "@/modules/shared/datetime";
+import {
+  formatDateKeyLabel,
+  hospitalRange,
+  isValidDateKey,
+  startOfHospitalDay,
+  todayKey,
+} from "@/modules/shared/hospital-time";
 import NewOpVisitForm from "./NewOpVisitForm";
 import {
   Table,
@@ -39,12 +46,25 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function OpPage() {
-  await requirePagePermission("op.access");
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  const today = new Date();
+export default async function OpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await requirePagePermission("op.access");
+  const sp = await searchParams;
+
+  const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
+  const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
+  const range = hospitalRange(fromKey, toKey);
+  const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
+
   const [visits, patients, doctors] = await Promise.all([
-    listOpVisits(today),
+    listOpVisits(range),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -63,7 +83,11 @@ export default async function OpPage() {
         <div>
           <h1 className="text-xl font-bold text-navy">OP Management</h1>
           <p className="page-note">
-            {visits.length} visit{visits.length === 1 ? "" : "s"} recorded today · Sequential OPD queue
+            {visits.length} visit{visits.length === 1 ? "" : "s"} from{" "}
+            {fromKey === toKey
+              ? formatDateKeyLabel(fromKey)
+              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {" "}· Sequential OPD queue
           </p>
         </div>
       </div>
@@ -71,15 +95,45 @@ export default async function OpPage() {
       {/* Register new OP visit */}
       <NewOpVisitForm patients={patients} doctors={doctors} />
 
-      {/* Today's OP Visits Table */}
+      {/* OP visit date filter — applied server-side */}
+      <form method="GET" action="/op" className="card p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor="from" className="field-label">
+              OP visit date from
+            </label>
+            <input id="from" type="date" name="from" defaultValue={fromKey} className="input" />
+          </div>
+          <div>
+            <label htmlFor="to" className="field-label">
+              To
+            </label>
+            <input id="to" type="date" name="to" defaultValue={toKey} className="input" />
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" className="btn btn-primary">
+              Apply date filter
+            </button>
+            {hasDateFilter ? (
+              <Link href="/op" className="btn btn-secondary">
+                Today
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </form>
+
+      {/* OP Visits Table */}
       <section className="card overflow-hidden">
         <div className="card-header flex items-center justify-between">
           <div>
-            <h2 className="card-title">Today&apos;s OP Queue</h2>
-            <p className="card-subtitle">Active and completed consultations for today</p>
+            <h2 className="card-title">OP Queue</h2>
+            <p className="card-subtitle">Consultations registered in the selected date range</p>
           </div>
           <span className="text-xs text-muted-foreground">
-            {formatDate(today)}
+            {fromKey === toKey
+              ? formatDateKeyLabel(fromKey)
+              : `${formatDate(startOfHospitalDay(fromKey))} – ${formatDate(startOfHospitalDay(toKey))}`}
           </span>
         </div>
 

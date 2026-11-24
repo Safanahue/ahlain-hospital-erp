@@ -2,6 +2,7 @@ import "server-only";
 import type { ItemCategory, Prisma, Role, User } from "@prisma/client";
 import { Prisma as PrismaNS } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { hospitalRange } from "@/modules/shared/hospital-time";
 import { authorize } from "@/modules/auth/authorize";
 import { IP_BED_MANAGE_ROLES, IP_DISCHARGE_ROLES, IP_WORK_ROLES } from "@/modules/auth/roles";
 import { ApiError } from "@/modules/shared/api";
@@ -194,6 +195,11 @@ export async function listAdmissions(rawQuery: unknown): Promise<{
   const where: Prisma.AdmissionWhereInput = {};
   if (query.status && query.status !== "ALL") where.status = query.status;
   if (query.ward) where.ward = query.ward;
+  if (query.from || query.to) {
+    const from = query.from ?? (query.to as string);
+    const to = query.to ?? (query.from as string);
+    where.admissionDate = hospitalRange(from, to);
+  }
   if (query.q) {
     where.OR = [
       { admissionNo: { contains: query.q, mode: "insensitive" } },

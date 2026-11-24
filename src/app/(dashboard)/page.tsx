@@ -32,6 +32,7 @@ import {
   StatusBadge,
 } from "@/modules/shared/components/Badges";
 import { requirePageUser, getPermissionsFor } from "@/modules/auth/guards";
+import DateWiseSection from "@/modules/dashboard/components/DateWiseSection";
 import {
   Table,
   TableBody,
@@ -43,6 +44,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 const METHOD_LABELS: Record<string, string> = {
   CASH: "Cash",
   UPI: "UPI",
@@ -50,9 +55,22 @@ const METHOD_LABELS: Record<string, string> = {
   BANK_TRANSFER: "Bank Transfer",
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requirePageUser();
   const permissions = await getPermissionsFor(user);
+  const sp = await searchParams;
+  const dateWiseParams = {
+    date: first(sp.date),
+    month: first(sp.month),
+    view: first(sp.view),
+    kind: first(sp.kind),
+    q: first(sp.q),
+    page: first(sp.page),
+  };
 
   // 1. DOCTOR DASHBOARD VIEW
   if (user.role === "DOCTOR") {
@@ -127,6 +145,9 @@ export default async function DashboardPage() {
             accent="teal"
           />
         </div>
+
+        {/* Date-wise patient calendar & activity (doctor-scoped) */}
+        <DateWiseSection params={dateWiseParams} doctorId={user.id} />
 
         {/* Clinical Tables Grid */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -435,6 +456,9 @@ export default async function DashboardPage() {
           />
         </div>
 
+        {/* Date-wise patient calendar & activity */}
+        <DateWiseSection params={dateWiseParams} />
+
         {/* Front-Desk Tables Grid */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Recently Registered Patients */}
@@ -704,6 +728,9 @@ export default async function DashboardPage() {
           accent="navy"
         />
       </div>
+
+      {/* Date-wise patient calendar & activity */}
+      <DateWiseSection params={dateWiseParams} />
 
       {/* Recent Activity Tables */}
       <div className="grid gap-6 lg:grid-cols-2">

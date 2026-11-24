@@ -56,6 +56,8 @@ export default async function IpPage({
     q: first(sp.q),
     status: first(sp.status) ?? "ALL",
     ward: first(sp.ward),
+    from: first(sp.from),
+    to: first(sp.to),
   });
   const query = parsed.success
     ? parsed.data
@@ -80,7 +82,13 @@ export default async function IpPage({
 
   const canManageBeds = permissions.has("ip.access");
   const canDischarge = permissions.has("ip.discharge");
-  const hasFilters = Boolean(query.q || (query.status && query.status !== "ALL") || query.ward);
+  const hasFilters = Boolean(
+    query.q ||
+      (query.status && query.status !== "ALL") ||
+      query.ward ||
+      query.from ||
+      query.to,
+  );
 
   const stats = [
     { label: "Currently admitted", value: overview.admitted, hint: "Active inpatient stays" },
@@ -173,6 +181,32 @@ export default async function IpPage({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="from" className="field-label">
+              Admitted from
+            </label>
+            <input
+              id="from"
+              name="from"
+              type="date"
+              defaultValue={query.from ?? ""}
+              className="input"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="to" className="field-label">
+              Admitted to
+            </label>
+            <input
+              id="to"
+              name="to"
+              type="date"
+              defaultValue={query.to ?? ""}
+              className="input"
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -290,6 +324,8 @@ export default async function IpPage({
             q: query.q,
             status: query.status === "ALL" ? undefined : query.status,
             ward: query.ward,
+            from: query.from,
+            to: query.to,
           }}
           page={result.page}
           totalPages={result.totalPages}
