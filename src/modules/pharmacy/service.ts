@@ -86,13 +86,20 @@ export async function createMedicine(rawInput: CreateMedicineInput, actor: User)
   });
 }
 
-export async function listPrescriptions(options?: { status?: string; patientId?: string }) {
+export async function listPrescriptions(options?: {
+  status?: string;
+  patientId?: string;
+  range?: { gte: Date; lt: Date };
+}) {
   const where: Prisma.PrescriptionWhereInput = {};
   if (options?.status && options.status !== "ALL") {
     where.status = options.status;
   }
   if (options?.patientId) {
     where.patientId = options.patientId;
+  }
+  if (options?.range) {
+    where.createdAt = options.range;
   }
 
   return prisma.prescription.findMany({

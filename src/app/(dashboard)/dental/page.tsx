@@ -4,6 +4,12 @@ import { listDentalEncounters } from "@/modules/dental/service";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatTime } from "@/modules/shared/datetime";
 import { formatINR } from "@/modules/shared/money";
+import {
+  formatDateKeyLabel,
+  hospitalRange,
+  isValidDateKey,
+  todayKey,
+} from "@/modules/shared/hospital-time";
 import NewDentalEncounterForm from "./NewDentalEncounterForm";
 import DentalActions from "./DentalActions";
 import {
@@ -40,11 +46,24 @@ function DentalStatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function DentalPage() {
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DentalPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requirePagePermission("dental.access");
+  const sp = await searchParams;
+
+  const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
+  const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
+  const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [encounters, patients, dentists, dentalServices] = await Promise.all([
-    listDentalEncounters(),
+    listDentalEncounters(hospitalRange(fromKey, toKey)),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -79,6 +98,40 @@ export default async function DentalPage() {
           Manage Service Catalog →
         </Link>
       </div>
+
+      {/* Dental encounter date filter — applied server-side */}
+      <form method="GET" action="/dental" className="card p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor="from" className="field-label">
+              Encounter date from
+            </label>
+            <input id="from" type="date" name="from" defaultValue={fromKey} className="input" />
+          </div>
+          <div>
+            <label htmlFor="to" className="field-label">
+              To
+            </label>
+            <input id="to" type="date" name="to" defaultValue={toKey} className="input" />
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" className="btn btn-primary">
+              Apply date filter
+            </button>
+            {hasDateFilter ? (
+              <Link href="/dental" className="btn btn-secondary">
+                Today
+              </Link>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Showing encounters from{" "}
+            {fromKey === toKey
+              ? formatDateKeyLabel(fromKey)
+              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+          </p>
+        </div>
+      </form>
 
       {/* New Dental Encounter Form */}
       <NewDentalEncounterForm

@@ -70,8 +70,9 @@ export async function createDentalEncounter(
   });
 }
 
-export async function listDentalEncounters() {
+export async function listDentalEncounters(range?: { gte: Date; lt: Date }) {
   return prisma.dentalEncounter.findMany({
+    ...(range ? { where: { createdAt: range } } : {}),
     orderBy: { createdAt: "desc" },
     include: {
       patient: { select: { id: true, name: true, uhid: true, phone: true, age: true, gender: true } },

@@ -4,6 +4,12 @@ import { listLabOrders, listReferenceRanges } from "@/modules/laboratory/service
 import { listTemplates } from "@/modules/laboratory/presets";
 import { prisma } from "@/lib/prisma";
 import { formatINR } from "@/modules/shared/money";
+import {
+  formatDateKeyLabel,
+  hospitalRange,
+  isValidDateKey,
+  todayKey,
+} from "@/modules/shared/hospital-time";
 import NewLabOrderForm from "./NewLabOrderForm";
 import LabOrderActions from "./LabOrderActions";
 import ReferenceRangesManager from "./ReferenceRangesManager";
@@ -43,12 +49,25 @@ function LabStatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function LaboratoryPage() {
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function LaboratoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requirePagePermission("lab.access");
   const permissions = await getPermissionsFor(user);
+  const sp = await searchParams;
+
+  const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
+  const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
+  const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [orders, patients, doctors, labServices, initialRanges, templates] = await Promise.all([
-    listLabOrders(),
+    listLabOrders(hospitalRange(fromKey, toKey)),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -100,7 +119,11 @@ export default async function LaboratoryPage() {
         <div>
           <h1 className="text-xl font-bold text-navy">Laboratory Module</h1>
           <p className="page-note">
-            {orders.length} diagnostic investigation{orders.length === 1 ? "" : "s"} · Sample tracking,
+            {orders.length} diagnostic investigation{orders.length === 1 ? "" : "s"} from{" "}
+            {fromKey === toKey
+              ? formatDateKeyLabel(fromKey)
+              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {" "}· Sample tracking,
             preset-based results entry &amp; printable reports
           </p>
         </div>
@@ -122,6 +145,34 @@ export default async function LaboratoryPage() {
 
       {/* New Lab Order Requisition Form */}
       <NewLabOrderForm patients={patients} doctors={doctors} catalogServices={labServices} />
+
+      {/* Lab order date filter — applied server-side */}
+      <form method="GET" action="/laboratory" className="card p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor="from" className="field-label">
+              Lab order date from
+            </label>
+            <input id="from" type="date" name="from" defaultValue={fromKey} className="input" />
+          </div>
+          <div>
+            <label htmlFor="to" className="field-label">
+              To
+            </label>
+            <input id="to" type="date" name="to" defaultValue={toKey} className="input" />
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" className="btn btn-primary">
+              Apply date filter
+            </button>
+            {hasDateFilter ? (
+              <Link href="/laboratory" className="btn btn-secondary">
+                Today
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </form>
 
       {/* Reference Ranges Management (Editable List) */}
       <ReferenceRangesManager
