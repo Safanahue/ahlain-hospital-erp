@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { authorize } from "@/modules/auth/authorize";
 import { APPOINTMENT_ROLES, OP_VISIT_ROLES } from "@/modules/auth/roles";
 import { ApiError } from "@/modules/shared/api";
+import { hospitalDayRange, localDateKey } from "@/modules/shared/hospital-time";
 import { writeAuditLog } from "@/modules/audit/audit";
 import { nextSequence } from "@/modules/billing/service";
 import {
@@ -70,7 +71,9 @@ export async function createOpVisit(
   });
 }
 
-export async function listOpVisits(range?: { gte: Date; lt: Date }): Promise<
+export async function listOpVisits(
+  range?: { gte: Date; lt: Date } | Date,
+): Promise<
   {
     id: string;
     opNo: string;
@@ -88,7 +91,9 @@ export async function listOpVisits(range?: { gte: Date; lt: Date }): Promise<
 > {
   const where: { createdAt?: { gte: Date; lt: Date } } = {};
   if (range) {
-    where.createdAt = { gte: range.gte, lt: range.lt };
+    // A bare Date keeps the original "that hospital day" behaviour.
+    where.createdAt =
+      range instanceof Date ? hospitalDayRange(localDateKey(range)) : range;
   }
 
   return prisma.oPVisit.findMany({
