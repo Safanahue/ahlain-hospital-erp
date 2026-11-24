@@ -1,0 +1,55 @@
+﻿# Dependencies
+/node_modules/
+
+# Next.js
+/.next/
+/out/
+/build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Local databases and hospital data
+*.mdb
+*.accdb
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.backup
+/backups/
+/CHospital_SQL_Backups/
+/.data/
+/copyext/
+
+# Archives
+*.zip
+*.7z
+*.rar
+
+# Uploads and private files
+/public/uploads/
+/screenshots/
+
+# Local scripts
+/scripts/
+*.bat
+*.ps1
+*.vbs
+
+# Prisma seed data - review separately
+/prisma/seed.ts
+
+# System files
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*
+/logs/

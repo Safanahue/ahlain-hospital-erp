@@ -1,0 +1,892 @@
+// AHLAIN HOSPITAL ERP — Phase 1 data model.
+// All monetary values are integers in PAISE (₹1 = 100 paise).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  BILLING_STAFF
+  ACCOUNTS
+  DOCTOR
+  RECEPTION
+  NURSE
+  LAB_TECHNICIAN
+  PHARMACIST
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Department {
+  OP
+  IP
+  LAB
+  PHARMACY
+  DENTAL
+}
+
+enum BillType {
+  GENERAL
+  PACKAGE
+  INSURANCE
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ItemCategory {
+  SERVICE_CHARGES
+  LABORATORY
+  PHARMACY
+  ROOM_CHARGES
+  DOCTOR_CONSULTATION
+  OTHER_CHARGES
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  SUCCESS
+  PENDING
+  FAILED
+}
+
+enum ReconciliationStatus {
+  PENDING
+  RECONCILED
+  MISMATCH
+}
+
+// ---------------------------------------------------------------------------
+// Core
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(BILLING_STAFF)
+  active       Boolean  @default(true)
+  // Phase 1 staff accounts: an admin-issued temporary password must be changed
+  // before the account can use any module.
+  mustChangePassword   Boolean   @default(false)
+  tempPasswordIssuedAt DateTime?
+  // Phase 3 — last successful sign-in, shown in the staff panel.
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  invoicesCreated    Invoice[]  @relation("InvoiceCreatedBy")
+  paymentsCollected  Payment[]  @relation("PaymentCollectedBy")
+  paymentsReconciled Payment[]  @relation("PaymentReconciledBy")
+  auditLogs          AuditLog[]
+
+  // Wave 2 inverse relations
+  appointments           Appointment[]     @relation("AppointmentDoctor")
+  opVisits               OPVisit[]         @relation("OpVisitDoctor")
+  opVisitsNurse          OPVisit[]         @relation("OpVisitNurse")
+  dentalEncounters       DentalEncounter[] @relation("DentalDentist")
+  labOrdersOrdered       LabOrder[]        @relation("LabOrderOrderedBy")
+  labOrdersVerified      LabOrder[]        @relation("LabOrderVerifiedBy")
+  prescriptionsDispensed Prescription[]    @relation("PrescriptionDispensedBy")
+  admissionsDoctor       Admission[]       @relation("AdmissionDoctor")
+  nursingNotes           NursingNote[]     @relation("NursingNoteNurse")
+
+  // Wave 3 — IP management & lab report presets
+  admissionsAttending  Admission[]         @relation("AdmissionAttendingDoctor")
+  admissionsDischarged Admission[]         @relation("AdmissionDischargedBy")
+  progressNotes        ProgressNote[]      @relation("ProgressNoteAuthor")
+  bedTransfers         BedTransfer[]       @relation("BedTransferBy")
+  labTemplates         LabReportTemplate[] @relation("LabTemplateCreatedBy")
+
+  // Phase 2 — per-user permission overrides on top of the role defaults.
+  permissionOverrides UserPermission[]
+  // Phase 3 — sign-in history for the audit screen.
+  loginEvents LoginEvent[]
+  // Phase 5 — SMS messages this staff member sent to patients.
+  sentSms SmsMessage[]
+  // Phase 7 — refunds this user requested or approved.
+  refundsRequested Refund[] @relation("RefundRequestedBy")
+  refundsApproved  Refund[] @relation("RefundApprovedBy")
+}
+
+enum SmsStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/**
+ * Phase 5 — every SMS the ERP tried to send. Doubles as the communication log:
+ * the message body is stored, credentials never are.
+ */
+model SmsMessage {
+  id                String    @id @default(cuid())
+  to                String
+  body              String
+  kind              String // RECEIPT | PAYMENT_LINK
+  status            SmsStatus
+  provider          String    @default("twilio")
+  providerMessageId String?
+  error             String?
+  entityId          String? // payment or invoice the message belongs to
+  sentById          String?
+  createdAt         DateTime  @default(now())
+
+  sentBy User? @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityId])
+}
+
+/**
+ * One sign-in attempt. Passwords are never stored here — only the email that
+ * was tried, the outcome and where the request came from.
+ */
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String
+  success   Boolean
+  reason    String? // BAD_CREDENTIALS | INACTIVE | UNKNOWN_USER | BAD_INPUT
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}
+
+/**
+ * One explicit allow/deny for a staff account. Absence means “use the role
+ * default”. Kept as rows (not JSON) so every change is queryable and auditable.
+ */
+model UserPermission {
+  userId     String
+  permission String // permission key, e.g. "billing.collect"
+  allowed    Boolean @default(true)
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permission])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Patients (Wave 1)
+// ---------------------------------------------------------------------------
+
+model Patient {
+  id                    String    @id @default(cuid())
+  uhid                  String    @unique // e.g. AH-2026-001245 (auto-generated)
+  name                  String
+  phone                 String
+  age                   Int
+  gender                Gender
+  // Wave 1 — Patients 360 demographic extensions (all optional).
+  dob                   DateTime? @db.Date // date of birth; age is derived from it when present
+  bloodGroup            String? // A+, A-, B+, B-, AB+, AB-, O+, O- (validated in zod)
+  address               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  invoices         Invoice[]
+  appointments     Appointment[]
+  opVisits         OPVisit[]
+  dentalEncounters DentalEncounter[]
+  labOrders        LabOrder[]
+  prescriptions    Prescription[]
+  admissions       Admission[]
+
+  @@index([name])
+  @@index([phone])
+}
+
+// ---------------------------------------------------------------------------
+// Sequence counters
+// ---------------------------------------------------------------------------
+
+model SequenceCounter {
+  year  Int
+  kind  String // UHID | INVOICE | RECEIPT
+  value Int    @default(0)
+
+  @@id([year, kind])
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+model Invoice {
+  id          String        @id @default(cuid())
+  invoiceNo   String        @unique // INV-2026-00458 (sequential per year)
+  patientId   String
+  department  Department
+  billType    BillType      @default(GENERAL)
+  status      InvoiceStatus @default(UNPAID)
+  totalAmount Int // paise
+  paidAmount  Int           @default(0) // paise (derived from SUCCESS payments)
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  patient  Patient       @relation(fields: [patientId], references: [id])
+  creator  User          @relation("InvoiceCreatedBy", fields: [createdBy], references: [id])
+  items    InvoiceItem[]
+  payments Payment[]
+  refunds  Refund[]
+
+  // Wave 3 — IP discharge billing (set by the discharge workflow)
+  admission Admission?
+
+  @@index([status])
+  @@index([patientId, createdAt])
+  @@index([department])
+  @@index([createdAt])
+}
+
+model InvoiceItem {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  category    ItemCategory
+  description String
+  amount      Int // paise
+  createdAt   DateTime     @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id                   String               @id @default(cuid())
+  invoiceId            String
+  receiptNo            String               @unique // RCPT-2026-00731
+  method               PaymentMethod
+  amount               Int // paise
+  transactionRef       String?              @unique // UTR / card ref / bank ref (unique across all payments)
+  status               PaymentStatus        @default(SUCCESS)
+  reconciliationStatus ReconciliationStatus @default(PENDING)
+  reconciliationNote   String?
+  reconciledBy         String?
+  reconciledAt         DateTime?
+  collectedBy          String
+  idempotencyKey       String               @unique // prevents double submit
+  createdAt            DateTime             @default(now())
+
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  collector  User     @relation("PaymentCollectedBy", fields: [collectedBy], references: [id])
+  reconciler User?    @relation("PaymentReconciledBy", fields: [reconciledBy], references: [id])
+  refunds    Refund[]
+
+  @@index([invoiceId, createdAt])
+  @@index([reconciliationStatus, method])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Refunds (Phase 7)
+// ---------------------------------------------------------------------------
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/**
+ * A refund is requested against one SUCCESS payment and must be approved by a
+ * finance (reconcile) user. Only APPROVED refunds reduce the invoice balance.
+ */
+model Refund {
+  id            String       @id @default(cuid())
+  refundNo      String       @unique // RFD-2026-00001
+  paymentId     String
+  invoiceId     String
+  amount        Int // paise
+  reason        String
+  status        RefundStatus @default(PENDING)
+  requestedById String
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectionNote String?
+  createdAt     DateTime     @default(now())
+
+  payment     Payment @relation(fields: [paymentId], references: [id])
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  requestedBy User    @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User?   @relation("RefundApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([invoiceId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentId])
+}
+
+// ---------------------------------------------------------------------------
+// Settings & audit
+// ---------------------------------------------------------------------------
+
+model HospitalSettings {
+  id            Int      @id @default(1)
+  hospitalName  String   @default("AHLAIN HOSPITAL")
+  address       String   @default("")
+  upiId         String   @default("ahlainhospital@upi")
+  upiQrImageUrl String   @default("/uploads/upi-qr.png")
+  // Phase 6 — printable document templates. Blank = built-in default text.
+  receiptFooter String   @default("")
+  termsText     String   @default("")
+  // Phase 8 — hospital logo printed on documents. Blank = built-in mark.
+  logoImageUrl  String   @default("")
+  // Branding blocks for printed documents (all optional).
+  tagline        String  @default("New Horizons, Better Health.")
+  phone          String  @default("")
+  email          String  @default("")
+  website        String  @default("")
+  gstin          String  @default("")
+  signatureImageUrl String @default("")
+  updatedAt     DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. PAYMENT_CREATED, PAYMENT_RECONCILED, LOGIN
+  entity    String // e.g. Payment, Invoice, User
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Master data (Wave 0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Billable hospital SERVICES — one master price list (OP consultation, lab
+ * tests, dental procedures, room tariffs, service charges…).
+ * NOT pharmacy stock: medicine batches/inventory live in a later wave.
+ * Prices are integers in PAISE.
+ */
+model ServiceCatalog {
+  id          String       @id @default(cuid())
+  code        String       @unique // e.g. OP-CONSULT, LAB-FBC, DENT-ROOT
+  name        String
+  description String?
+  department  Department
+  category    ItemCategory
+  pricePaise  Int // ₹ integer paise
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  referenceRanges LabReferenceRange[]
+
+  @@index([department])
+  @@index([category])
+  @@index([active])
+  @@index([name])
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2 — Appointments & Queue
+// ---------------------------------------------------------------------------
+
+/**
+ * Scheduled patient appointments. One slot per (doctor, datetime) pair; the
+ * clinic books against Doctor+schedule while the API accepts any valid
+ * appointment.
+ * Status flow: SCHEDULED → CHECKED_IN → DONE | NO_SHOW
+ */
+model Appointment {
+  id        String   @id @default(cuid())
+  seqNo     Int      @default(0) // sequence number for display ordering
+  slot      DateTime // appointment datetime (UTC)
+  patientId String
+  doctorId  String
+  status    String   @default("SCHEDULED") // SCHEDULED | CHECKED_IN | DONE | NO_SHOW
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  User    @relation("AppointmentDoctor", fields: [doctorId], references: [id])
+
+  @@unique([slot, doctorId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([slot])
+}
+
+// ---------------------------------------------------------------------------
+// Wave 2 — OP Management
+// ---------------------------------------------------------------------------
+
+/**
+ * OP visit record: the clinical encounter for a walk-in / booked OP patient.
+ * `opNo` is the hospital's alphabetical OPD queue number (AH-OP-2026-0001…).
+ * Status: CHECK_IN → WAITING_ROOM → COMPLETED | Cancelled.
+ */
+model OPVisit {
+  id                   String   @id @default(cuid())
+  opNo                 String   @unique // e.g. AH-OP-2026-0001 (auto-generated)
+  patientId            String
+  doctorId             String
+  nurseId              String?
+  status               String   @default("CHECK_IN") // CHECK_IN | WAITING_ROOM | COMPLETED | CANCELLED
+  complaint            String?
+  provisionalDiagnosis String?
+  treatmentPlan        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  User    @relation("OpVisitDoctor", fields: [doctorId], references: [id])
+  nurse   User?   @relation("OpVisitNurse", fields: [nurseId], references: [id])
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Dental Module
+// ---------------------------------------------------------------------------
+
+/**
+ * Dental clinical encounter: oral examination, tooth chart notation,
+ * procedures performed, and notes.
+ * Sequential dental case number: AH-DENT-2026-XXXX.
+ */
+model DentalEncounter {
+  id             String   @id @default(cuid())
+  dentalNo       String   @unique // e.g. AH-DENT-2026-0001
+  patientId      String
+  dentistId      String
+  toothNumber    String? // Universal/FDI tooth numbers, e.g. "18, 19" or "Upper Right Molar"
+  procedureName  String // e.g. Root Canal Treatment, Scaling, Dental Extraction
+  chiefComplaint String?
+  clinicalNotes  String?
+  costPaise      Int      @default(0) // ₹ in paise
+  status         String   @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | CANCELLED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  dentist User    @relation("DentalDentist", fields: [dentistId], references: [id])
+
+  @@index([patientId])
+  @@index([dentistId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Laboratory Module
+// ---------------------------------------------------------------------------
+
+/**
+ * Diagnostic lab order & investigation record.
+ * Sequential lab accession number: AH-LAB-2026-XXXX.
+ * Status flow: ORDERED -> SAMPLE_COLLECTED -> RESULT_ENTERED -> VERIFIED | CANCELLED
+ */
+model LabOrder {
+  id                String    @id @default(cuid())
+  orderNo           String    @unique // e.g. AH-LAB-2026-0001
+  patientId         String
+  orderedById       String
+  testName          String // e.g. Full Blood Count, Lipid Profile, Thyroid Panel
+  sampleType        String? // e.g. Blood, Urine, Sputum, Swab
+  sampleCollectedAt DateTime?
+  resultValue       String? // Diagnostic readings, values & units
+  referenceRange    String? // Standard biological reference interval
+  findings          String? // Pathologist / technician notes
+  costPaise         Int       @default(0) // ₹ in paise
+  status            String    @default("ORDERED") // ORDERED | SAMPLE_COLLECTED | RESULT_ENTERED | VERIFIED | CANCELLED
+  verifiedById      String?
+  verifiedAt        DateTime?
+  templateId        String? // report preset used for structured results
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  patient    Patient            @relation(fields: [patientId], references: [id])
+  orderedBy  User               @relation("LabOrderOrderedBy", fields: [orderedById], references: [id])
+  verifiedBy User?              @relation("LabOrderVerifiedBy", fields: [verifiedById], references: [id])
+  template   LabReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  results    LabOrderResult[]
+
+  @@index([patientId])
+  @@index([orderedById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/**
+ * Configured clinical reference range parameter for a laboratory test.
+ * Supports multiple parameters per test, age/gender brackets, decimal values, and units.
+ */
+model LabReferenceRange {
+  id            String   @id @default(cuid())
+  serviceId     String? // Optional link to ServiceCatalog (department: LAB)
+  testName      String // e.g. "Full Blood Count (FBC)", "Lipid Profile"
+  parameterName String // e.g. "Haemoglobin", "Total Cholesterol", "WBC"
+  gender        String   @default("Both") // "Male" | "Female" | "Both"
+  ageGroup      String   @default("Adult") // e.g. "Adult", "Child", "Neonate", "Elderly"
+  minValue      Float? // e.g. 13.0 (decimal supported)
+  maxValue      Float? // e.g. 17.0 (decimal supported)
+  unit          String // e.g. "g/dL", "mg/dL", "/mcL"
+  displayRange  String? // e.g. "13.0 - 17.0 g/dL" or custom
+  category      String? // library grouping, e.g. "Haematology", "Biochemistry"
+  sortOrder     Int      @default(0) // parameter order inside the test
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  service ServiceCatalog? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([testName])
+  @@index([serviceId])
+  @@index([parameterName])
+  @@index([category])
+}
+
+// ---------------------------------------------------------------------------
+// Pharmacy & Stock Module
+// ---------------------------------------------------------------------------
+
+/**
+ * Medicine item in hospital pharmacy inventory.
+ */
+model Medicine {
+  id             String   @id @default(cuid())
+  itemCode       String   @unique // e.g. MED-PARA-500, MED-AMOX-500
+  name           String // e.g. Paracetamol 500mg, Amoxicillin 500mg
+  category       String // Tablet, Capsule, Syrup, Injection, Ointment
+  manufacturer   String?
+  batchNumber    String // e.g. BATCH-2026-089
+  expiryDate     DateTime @db.Date
+  stockQuantity  Int      @default(0) // Available unit count
+  unitPricePaise Int      @default(0) // ₹ in paise per unit
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  dispenseItems PrescriptionItem[]
+
+  @@index([name])
+  @@index([category])
+  @@index([active])
+}
+
+/**
+ * Patient pharmacy prescription & dispensing record.
+ * Sequential pharmacy dispense token: AH-PHARM-2026-XXXX.
+ * Status flow: PENDING -> DISPENSED | CANCELLED
+ */
+model Prescription {
+  id            String    @id @default(cuid())
+  dispenseNo    String    @unique // e.g. AH-PHARM-2026-0001
+  patientId     String
+  prescribedBy  String? // Doctor name or identifier
+  status        String    @default("PENDING") // PENDING | DISPENSED | CANCELLED
+  totalPaise    Int       @default(0) // ₹ in paise
+  dispensedById String?
+  dispensedAt   DateTime?
+  instructions  String? // e.g. "Take with food after meals"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient     Patient            @relation(fields: [patientId], references: [id])
+  dispensedBy User?              @relation("PrescriptionDispensedBy", fields: [dispensedById], references: [id])
+  items       PrescriptionItem[]
+
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PrescriptionItem {
+  id             String  @id @default(cuid())
+  prescriptionId String
+  medicineId     String
+  quantity       Int     @default(1)
+  unitPricePaise Int     @default(0)
+  totalPaise     Int     @default(0)
+  dosage         String? // e.g. "1-0-1 for 5 days"
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine     @relation(fields: [medicineId], references: [id])
+
+  @@index([prescriptionId])
+  @@index([medicineId])
+}
+
+// ---------------------------------------------------------------------------
+// IP Management Module (Inpatient & Beds)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hospital bed in a specific ward.
+ * Status: AVAILABLE | OCCUPIED | MAINTENANCE
+ */
+model Bed {
+  id             String   @id @default(cuid())
+  bedNumber      String   @unique // e.g. GW-101, ICU-01, PVT-201
+  ward           String // General Ward, ICU, Deluxe Private, Semi-Private
+  roomNo         String? // room / cabin number inside the ward, e.g. 101, ICU-B
+  floor          String? // e.g. 1st Floor, 2nd Floor
+  dailyRatePaise Int      @default(0) // ₹ per day in paise
+  status         String   @default("AVAILABLE") // AVAILABLE | OCCUPIED | MAINTENANCE
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  admissions    Admission[]
+  transfersFrom BedTransfer[] @relation("BedTransferFrom")
+  transfersTo   BedTransfer[] @relation("BedTransferTo")
+
+  @@index([ward])
+  @@index([status])
+}
+
+/**
+ * Patient Inpatient Admission record.
+ * Sequential token: AH-IP-2026-XXXX.
+ * Status: ADMITTED | DISCHARGED | TRANSFERRED
+ */
+model Admission {
+  id                   String    @id @default(cuid())
+  admissionNo          String    @unique // e.g. AH-IP-2026-0001
+  patientId            String
+  admittingDoctorId    String
+  bedId                String
+  ward                 String // snapshot of ward at admission
+  diagnosis            String // Admission reason / clinical diagnosis
+  admissionDate        DateTime  @default(now())
+  dischargeDate        DateTime?
+  dischargeSummary     String?
+  status               String    @default("ADMITTED") // ADMITTED | DISCHARGED
+  // Wave 3 — doctor assignment & discharge documentation/billing
+  attendingDoctorId    String?
+  dischargeType        String? // CURED | IMPROVED | REFERRED | LAMA | TRANSFERRED_OUT | DEATH
+  finalDiagnosis       String?
+  conditionAtDischarge String?
+  dischargedById       String?
+  invoiceId            String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  admittingDoctor User           @relation("AdmissionDoctor", fields: [admittingDoctorId], references: [id])
+  bed             Bed            @relation(fields: [bedId], references: [id])
+  nursingNotes    NursingNote[]
+  attendingDoctor User?          @relation("AdmissionAttendingDoctor", fields: [attendingDoctorId], references: [id])
+  dischargedBy    User?          @relation("AdmissionDischargedBy", fields: [dischargedById], references: [id])
+  invoice         Invoice?       @relation(fields: [invoiceId], references: [id])
+  transfers       BedTransfer[]
+  progressNotes   ProgressNote[]
+
+  @@index([patientId])
+  @@index([admittingDoctorId])
+  @@index([bedId])
+  @@index([status])
+  @@index([admissionDate])
+  @@index([attendingDoctorId])
+}
+
+/**
+ * Inpatient nursing observation & vital chart note.
+ */
+model NursingNote {
+  id            String   @id @default(cuid())
+  admissionId   String
+  nurseId       String
+  bloodPressure String? // e.g. 120/80
+  pulseRate     Int? // bpm
+  temperature   String? // e.g. 98.6 F
+  spo2          Int? // percentage
+  notes         String // Nursing observations, patient condition, medications
+  recordedAt    DateTime @default(now())
+
+  admission Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  nurse     User      @relation("NursingNoteNurse", fields: [nurseId], references: [id])
+
+  @@index([admissionId])
+  @@index([nurseId])
+}
+
+/**
+ * Bed/ward move for an admitted patient. Each row is one movement, so the
+ * full transfer history is preserved while Admission.bedId always holds the
+ * current bed.
+ */
+model BedTransfer {
+  id              String   @id @default(cuid())
+  admissionId     String
+  fromBedId       String
+  fromBedNumber   String
+  fromWard        String
+  toBedId         String
+  toBedNumber     String
+  toWard          String
+  reason          String?
+  transferredById String
+  transferredAt   DateTime @default(now())
+
+  admission     Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  fromBed       Bed       @relation("BedTransferFrom", fields: [fromBedId], references: [id])
+  toBed         Bed       @relation("BedTransferTo", fields: [toBedId], references: [id])
+  transferredBy User      @relation("BedTransferBy", fields: [transferredById], references: [id])
+
+  @@index([admissionId])
+  @@index([transferredAt])
+}
+
+/**
+ * Daily clinical progress note and treatment details written during an
+ * inpatient stay (doctor/ nurse entries). NursingNote stays the vitals chart.
+ */
+model ProgressNote {
+  id          String   @id @default(cuid())
+  admissionId String
+  authorId    String
+  noteDate    DateTime @default(now())
+  note        String // clinical progress / observation
+  treatment   String? // treatment given, medication changes, plan
+  createdAt   DateTime @default(now())
+
+  admission Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  author    User      @relation("ProgressNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([admissionId, noteDate])
+  @@index([authorId])
+}
+
+// ---------------------------------------------------------------------------
+// Laboratory report presets (Wave 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reusable lab report template (preset) such as CBC or LFT.
+ * Parameters live in LabTemplateParameter; each parameter owns one or more
+ * age/gender-specific reference ranges in LabTemplateRange.
+ */
+model LabReportTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g. "CBC / Haematology"
+  category    String   @default("Haematology") // Haematology | Biochemistry | ...
+  description String?
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy  User?                  @relation("LabTemplateCreatedBy", fields: [createdById], references: [id])
+  parameters LabTemplateParameter[]
+  orders     LabOrder[]
+
+  @@index([category])
+  @@index([active])
+}
+
+/**
+ * One test parameter (row) inside a report preset.
+ */
+model LabTemplateParameter {
+  id         String @id @default(cuid())
+  templateId String
+  section    String @default("") // grouping heading, e.g. "Differential Count"
+  name       String // e.g. "Haemoglobin (Hb)"
+  unit       String @default("")
+  dataType   String @default("NUMERIC") // NUMERIC | TEXT
+  sortOrder  Int    @default(0)
+
+  template LabReportTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  ranges   LabTemplateRange[]
+  results  LabOrderResult[]
+
+  @@index([templateId, sortOrder])
+}
+
+/**
+ * Age/gender-specific reference interval for one preset parameter.
+ */
+model LabTemplateRange {
+  id           String  @id @default(cuid())
+  parameterId  String
+  gender       String  @default("Both") // Male | Female | Both
+  ageMinYears  Int? // inclusive lower bound; null = no lower limit
+  ageMaxYears  Int? // inclusive upper bound; null = no upper limit
+  minValue     Float?
+  maxValue     Float?
+  displayRange String? // optional override, e.g. "< 200" or "Negative"
+  notes        String?
+
+  parameter LabTemplateParameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+
+  @@index([parameterId])
+}
+
+/**
+ * Snapshot of an entered result for one lab order parameter. Values are copied
+ * in so an issued report never changes when a preset is edited later.
+ */
+model LabOrderResult {
+  id             String   @id @default(cuid())
+  orderId        String
+  parameterId    String?
+  section        String?
+  parameterName  String
+  resultValue    String
+  unit           String   @default("")
+  referenceRange String?
+  flag           String   @default("NONE") // LOW | HIGH | NORMAL | NONE
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  order     LabOrder              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  parameter LabTemplateParameter? @relation(fields: [parameterId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, sortOrder])
+}

@@ -1,0 +1,312 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   AHLAIN HOSPITAL design system
+   navy #0f2a4a · medical blue #1565b8 · teal #0e9aa7 · page #f3f5f8
+   card white + 1px #e2e7ee border + 12px radius + very subtle shadow
+
+   Architecture:
+   1. Design tokens        → :root + @theme inline
+   2. Base                 → typography, focus
+   3. Component classes    → .card, .btn*, .input*, .field-label (single source
+                             of truth for repeated markup; pages compose these)
+--------------------------------------------------------------------------- */
+
+:root {
+  --background: #f3f5f8;
+  --foreground: #0f2a4a;
+  --card: #ffffff;
+  --card-foreground: #0f2a4a;
+  --popover: #ffffff;
+  --popover-foreground: #0f2a4a;
+  --primary: #0f2a4a;
+  --primary-foreground: #ffffff;
+  --secondary: #eaeef4;
+  --secondary-foreground: #0f2a4a;
+  --muted: #eef1f5;
+  --muted-foreground: #5c6b7e;
+  --accent: #1565b8;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e2e7ee;
+  --input: #e2e7ee;
+  --ring: #1565b8;
+
+  /* Status colours — always paired bg + fg so badges stay legible */
+  --status-success: #16a34a;
+  --status-success-bg: #e8f6ed;
+  --status-warning: #b45309;
+  --status-warning-bg: #fdf3e3;
+  --status-danger: #dc2626;
+  --status-danger-bg: #fdecec;
+  --status-neutral: #5c6b7e;
+  --status-neutral-bg: #eef1f5;
+  --status-info: #1565b8;
+  --status-info-bg: #e8f1fb;
+
+  --teal: #0e9aa7;
+  --radius: 12px;
+
+  /* Elevation — two levels only, both barely-there */
+  --shadow-card: 0 1px 2px rgba(15, 42, 74, 0.05);
+  --shadow-pop: 0 8px 24px rgba(15, 42, 74, 0.12);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-navy: #0f2a4a;
+  --color-medical: #1565b8;
+  --color-teal: #0e9aa7;
+  --color-page: #f3f5f8;
+  --color-line: #e2e7ee;
+  --color-success: #16a34a;
+  --color-success-bg: #e8f6ed;
+  --color-warning: #b45309;
+  --color-warning-bg: #fdf3e3;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fdecec;
+  --color-info: #1565b8;
+  --color-info-bg: #e8f1fb;
+
+  --font-sans: var(--font-inter, "Inter"), "Segoe UI", system-ui,
+    -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Visible, consistent keyboard focus (in base so component classes can override) */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* --------------------------- Component classes --------------------------- */
+
+@layer components {
+  /* Card — white surface, hairline border, 12px radius, whisper shadow */
+  .card {
+    @apply rounded-xl border border-line bg-white;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-header {
+    @apply border-b border-line px-5 py-4;
+  }
+
+  .card-title {
+    @apply text-sm font-semibold text-navy;
+  }
+
+  .card-subtitle {
+    @apply mt-0.5 text-xs text-muted-foreground;
+  }
+
+  /* Buttons — one system: primary (navy), secondary (outline), medical,
+     danger, plus .btn-sm for table actions. Height 36–38px, 6px radius. */
+  .btn {
+    @apply inline-flex h-[38px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply bg-navy text-white hover:bg-[#163a63];
+  }
+
+  .btn-secondary {
+    @apply border border-line bg-white text-navy hover:bg-page;
+  }
+
+  .btn-medical {
+    @apply border border-medical bg-white text-medical hover:bg-medical hover:text-white;
+  }
+
+  .btn-danger {
+    @apply border border-danger/40 bg-danger-bg text-danger hover:bg-danger hover:text-white;
+  }
+
+  .btn-success {
+    @apply border border-success/40 bg-success-bg text-success hover:bg-success hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply text-navy hover:bg-page;
+  }
+
+  .btn-sm {
+    @apply h-[30px] gap-1.5 px-2.5 text-xs;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  /* Inputs — 38px height, 6px radius, navy text, subtle focus ring.
+     Width is intentionally not set here: add w-full / w-72 / w-auto per usage. */
+  .input {
+    @apply h-[38px] rounded-md border border-input bg-white px-3 text-sm text-navy placeholder:text-muted-foreground transition-colors focus-visible:border-medical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-medical/25 disabled:cursor-not-allowed disabled:bg-page disabled:opacity-60;
+  }
+
+  .input-invalid {
+    @apply border-danger focus-visible:border-danger focus-visible:ring-danger/25;
+  }
+
+  .textarea {
+    @apply w-full rounded-md border border-input bg-white px-3 py-2 text-sm text-navy placeholder:text-muted-foreground transition-colors focus-visible:border-medical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-medical/25;
+  }
+
+  /* Labels above fields */
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-navy;
+  }
+
+  .field-help {
+    @apply mt-1 text-xs text-muted-foreground;
+  }
+
+  /* Page intro line (count + context above a table) */
+  .page-note {
+    @apply text-sm text-muted-foreground;
+  }
+}
+
+/* Very subtle card shadow (cards also carry a 1px #e2e7ee border) */
+.card-shadow {
+  box-shadow: var(--shadow-card);
+}
+
+/* ----------------------------- Print (A4) --------------------------------- */
+
+/* Custom sleek scrollbar for sidebar */
+.custom-sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.custom-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.custom-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Only the receipt prints: hide everything else in the app shell. */
+  body * {
+    visibility: hidden;
+  }
+
+  #receipt-area,
+  #receipt-area *,
+  #report-area,
+  #report-area * {
+    visibility: visible;
+  }
+
+  #receipt-area,
+  #report-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* Long invoices/reports: never clip a row or split a signature block. */
+  table {
+    page-break-inside: auto;
+  }
+
+  tr,
+  td,
+  th {
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  .doc-section,
+  .doc-signatures {
+    page-break-inside: avoid;
+  }
+
+  .print-page-break {
+    page-break-before: always;
+  }
+
+  /* Watermark repeats on every printed page, behind the text. */
+  .doc-watermark {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
