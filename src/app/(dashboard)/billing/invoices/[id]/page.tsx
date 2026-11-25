@@ -128,7 +128,7 @@ export default async function InvoiceDetailPage({
                 Age / Gender
               </p>
               <p className="mt-0.5 font-medium text-navy">
-                {invoice.patient.age} · {invoice.patient.gender}
+                {invoice.patient.age === 30 ? "—" : invoice.patient.age} · {invoice.patient.gender}
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, IndianRupee, Pencil, Receipt, Wallet } from "lucide-react";
 import { requirePagePermission, getPermissionsFor } from "@/modules/auth/guards";
 import { getPatientDetail } from "@/modules/patients/queries";
+import { ageFromDob } from "@/modules/patients/schemas";
 import { formatINR } from "@/modules/shared/money";
 import {
   formatCalendarDate,
@@ -93,13 +94,13 @@ export default async function PatientDetailPage({
             <h2 className="card-title">{patient.name}</h2>
             <p className="card-subtitle">
               {patient.uhid} · {GENDER_LABELS[patient.gender] ?? patient.gender} ·{" "}
-              {patient.age} years
+              {patient.dob ? `${ageFromDob(patient.dob)} years` : patient.age === 30 ? "—" : `${patient.age} years`}
             </p>
           </div>
           <dl className="px-5 pb-4">
             <DetailRow label="UHID" value={patient.uhid} />
             <DetailRow label="Mobile" value={patient.phone} />
-            <DetailRow label="Age" value={`${patient.age} years`} />
+            <DetailRow label="Age" value={patient.dob ? `${ageFromDob(patient.dob)} years` : patient.age === 30 ? "—" : `${patient.age} years`} />
             <DetailRow
               label="Date of birth"
               value={patient.dob ? formatCalendarDate(patient.dob) : null}

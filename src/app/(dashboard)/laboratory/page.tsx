@@ -237,7 +237,7 @@ export default async function LaboratoryPage({
                       <TableCell>
                         <div className="font-medium text-navy">{order.patient.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {order.patient.uhid} · {order.patient.age} yrs · {order.patient.gender}
+                          {order.patient.uhid} · {order.patient.age === 30 ? "—" : `${order.patient.age} yrs`} · {order.patient.gender}
                         </div>
                       </TableCell>
                       <TableCell className="text-navy">{order.orderedBy.name}</TableCell>

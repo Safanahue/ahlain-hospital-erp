@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { requirePagePermission, getPermissionsFor } from "@/modules/auth/guards";
-import { patientListQuerySchema } from "@/modules/patients/schemas";
+import { patientListQuerySchema, ageFromDob } from "@/modules/patients/schemas";
 import { listPatients } from "@/modules/patients/queries";
 import { formatCalendarDate, formatDate } from "@/modules/shared/datetime";
 import Pagination from "@/modules/shared/components/Pagination";
@@ -163,7 +163,7 @@ export default async function PatientsPage({
                       {patient.phone}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {patient.age}
+                      {patient.dob ? ageFromDob(patient.dob) : patient.age === 30 ? "—" : patient.age}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {GENDER_LABELS[patient.gender] ?? patient.gender}

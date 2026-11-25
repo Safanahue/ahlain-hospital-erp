@@ -230,7 +230,7 @@ export default function PatientAutocomplete({
                 </span>
                 {selectedPatient.gender && (
                   <span className="text-[11px] text-muted-foreground">
-                    {selectedPatient.age ? `${selectedPatient.age}y ` : ""}
+                    {selectedPatient.age && selectedPatient.age !== 30 ? `${selectedPatient.age}y ` : ""}
                     {selectedPatient.gender.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -360,7 +360,7 @@ export default function PatientAutocomplete({
                             </span>
                             {patient.gender && (
                               <span className="text-[10px] text-muted-foreground">
-                                {patient.age ? `${patient.age}y ` : ""}
+                                {patient.age && patient.age !== 30 ? `${patient.age}y ` : ""}
                                 {patient.gender.charAt(0).toUpperCase()}
                               </span>
                             )}

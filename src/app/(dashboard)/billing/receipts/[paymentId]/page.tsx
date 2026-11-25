@@ -120,7 +120,7 @@ export default async function ReceiptPage({
                 { label: "Patient Name", value: invoice.patient.name },
                 {
                   label: "Age / Gender",
-                  value: `${invoice.patient.age} yrs / ${invoice.patient.gender.charAt(0)}${invoice.patient.gender
+                  value: `${invoice.patient.age === 30 ? "—" : `${invoice.patient.age} yrs`} / ${invoice.patient.gender.charAt(0)}${invoice.patient.gender
                     .slice(1)
                     .toLowerCase()}`,
                 },

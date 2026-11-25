@@ -265,7 +265,7 @@ export default async function IpPage({
                       <TableCell>
                         <div className="font-medium text-navy">{admission.patient.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {admission.patient.uhid} · {admission.patient.age} yrs ·{" "}
+                          {admission.patient.uhid} · {admission.patient.age === 30 ? "—" : `${admission.patient.age} yrs`} ·{" "}
                           {admission.patient.gender}
                         </div>
                       </TableCell>

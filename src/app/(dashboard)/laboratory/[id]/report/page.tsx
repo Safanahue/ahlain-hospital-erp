@@ -85,7 +85,7 @@ export default async function LabReportPage({ params }: { params: Promise<{ id: 
               { label: "Patient Name", value: order.patient.name },
               {
                 label: "Age / Gender",
-                value: `${order.patient.age} yrs / ${order.patient.gender.charAt(0)}${order.patient.gender
+                value: `${order.patient.age === 30 ? "—" : `${order.patient.age} yrs`} / ${order.patient.gender.charAt(0)}${order.patient.gender
                   .slice(1)
                   .toLowerCase()}`,
               },

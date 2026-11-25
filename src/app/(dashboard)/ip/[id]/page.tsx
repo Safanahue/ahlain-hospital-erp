@@ -59,7 +59,7 @@ export default async function AdmissionDetailPage({
           <div className="card-header">
             <h2 className="card-title">{admission.patient.name}</h2>
             <p className="card-subtitle">
-              {admission.patient.uhid} · {admission.patient.age} yrs ·{" "}
+              {admission.patient.uhid} · {admission.patient.age === 30 ? "—" : `${admission.patient.age} yrs`} ·{" "}
               {admission.patient.gender} · {admission.patient.phone}
             </p>
           </div>

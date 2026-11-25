@@ -499,7 +499,7 @@ export default async function DashboardPage({
                         <TableCell>
                           <div className="font-medium text-navy">{p.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {p.gender ? `${p.gender} · ` : ""}{p.age ? `${p.age} yrs` : ""}
+                            {p.gender ? `${p.gender} · ` : ""}{p.age && p.age !== 30 ? `${p.age} yrs` : ""}
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -831,7 +831,7 @@ export default async function DashboardPage({
                       <TableCell>
                         <div className="font-medium text-navy">{p.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {p.gender ? `${p.gender} · ` : ""}{p.age ? `${p.age} yrs` : ""}
+                          {p.gender ? `${p.gender} · ` : ""}{p.age && p.age !== 30 ? `${p.age} yrs` : ""}
                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">

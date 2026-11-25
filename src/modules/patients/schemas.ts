@@ -65,6 +65,16 @@ export function ageFromDob(dob: Date, now: Date = new Date()): number {
   return age;
 }
 
+/**
+ * Age to show in the UI. Prefer the date of birth (derived) and never display
+ * the legacy default of 30 for patients imported without a date of birth.
+ */
+export function displayAge(patient: { age: number; dob: Date | null }): number | null {
+  if (patient.dob) return ageFromDob(patient.dob);
+  if (patient.age === 30) return null;
+  return patient.age;
+}
+
 function parseDob(dob: string): Date {
   // UTC midnight keeps the calendar date exact in every timezone.
   return new Date(`${dob}T00:00:00Z`);

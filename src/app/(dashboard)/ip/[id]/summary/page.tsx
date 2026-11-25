@@ -58,7 +58,7 @@ export default async function DischargeSummaryPage({
               { label: "Patient Name", value: admission.patient.name },
               {
                 label: "Age / Gender",
-                value: `${admission.patient.age} yrs / ${admission.patient.gender.charAt(0)}${admission.patient.gender
+                value: `${admission.patient.age === 30 ? "—" : `${admission.patient.age} yrs`} / ${admission.patient.gender.charAt(0)}${admission.patient.gender
                   .slice(1)
                   .toLowerCase()}`,
               },

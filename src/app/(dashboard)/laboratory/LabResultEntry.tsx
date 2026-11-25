@@ -147,7 +147,7 @@ export default function LabResultEntry({
               <div>
                 <h3 className="text-sm font-bold text-navy">Enter results — {testName}</h3>
                 <p className="text-xs text-muted-foreground">
-                  Reference ranges are resolved for this patient ({patient.age} yrs,{" "}
+                  Reference ranges are resolved for this patient ({patient.age === 30 ? "—" : `${patient.age} yrs`},{" "}
                   {patient.gender.toLowerCase()}) and can be edited in presets.
                 </p>
               </div>

@@ -400,7 +400,7 @@ export default async function DateWiseSection({
                           </Link>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {row.age} yrs · {row.gender}
+                          {row.age && row.age !== 30 ? `${row.age} yrs` : "—"} · {row.gender}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {row.phone || "—"}

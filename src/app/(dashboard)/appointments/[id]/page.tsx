@@ -54,7 +54,7 @@ export default async function AppointmentDetail({ params }: Props) {
             </div>
             <div className="flex items-start justify-between gap-4 border-b border-line py-2.5">
               <dt className="text-xs font-medium text-muted-foreground">Age</dt>
-              <dd className="text-sm font-medium text-navy">{appointment.patient.age} years</dd>
+              <dd className="text-sm font-medium text-navy">{appointment.patient.age === 30 ? "—" : `${appointment.patient.age} years`}</dd>
             </div>
             <div className="flex items-start justify-between gap-4 border-b border-line py-2.5">
               <dt className="text-xs font-medium text-muted-foreground">Gender</dt>
