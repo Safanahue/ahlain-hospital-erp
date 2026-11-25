@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { signOutToLogin } from "@/modules/auth/sign-out";
 
 export default function ChangePasswordForm({ forced }: { forced: boolean }) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -38,7 +38,7 @@ export default function ChangePasswordForm({ forced }: { forced: boolean }) {
       }
 
       // The session token carries the old flag, so sign out and sign in again.
-      await signOut({ callbackUrl: "/login?changed=1" });
+      await signOutToLogin("/login?changed=1");
     } catch {
       setError("Network error. Please try again.");
     } finally {

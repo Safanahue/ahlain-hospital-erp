@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { Bell, LogOut, PanelLeft, Search, User as UserIcon } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { getPageMeta } from "@/modules/shared/nav";
 import { ROLE_LABELS } from "@/modules/auth/roles";
 import { cn } from "@/lib/utils";
 import PatientAutocomplete, { type PatientSearchResult } from "@/modules/patients/components/PatientAutocomplete";
+import { signOutToLogin } from "@/modules/auth/sign-out";
 
 export default function Header({
   user,
@@ -157,7 +157,7 @@ export default function Header({
           {/* Logout Action */}
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => void signOutToLogin("/login")}
             title="Sign out"
             aria-label="Sign out"
             className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-danger transition-colors ml-1"
