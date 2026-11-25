@@ -1,12 +1,7 @@
 import "server-only";
 import type { User, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { authorize } from "@/modules/auth/authorize";
-import {
-  LAB_ORDER_ROLES,
-  LAB_REF_RANGE_VIEW_ROLES,
-  LAB_REF_RANGE_MANAGE_ROLES,
-} from "@/modules/auth/roles";
+import { requireModulePermission } from "@/modules/auth/require-permission";
 import { ApiError } from "@/modules/shared/api";
 import { writeAuditLog } from "@/modules/audit/audit";
 import { nextSequence } from "@/modules/billing/service";
@@ -22,19 +17,16 @@ import {
   type UpdateRefRangeInput,
 } from "./schemas";
 
-function assertCanAccessLab(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_ORDER_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanAccessLab(actor: User) {
+  await requireModulePermission(actor, "lab.access");
 }
 
-function assertCanViewRefRanges(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_REF_RANGE_VIEW_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanViewRefRanges(actor: User) {
+  await requireModulePermission(actor, "lab.access");
 }
 
-function assertCanManageRefRanges(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_REF_RANGE_MANAGE_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanManageRefRanges(actor: User) {
+  await requireModulePermission(actor, "lab.masters");
 }
 
 function labOrderNo(year: number, value: number): string {
@@ -45,7 +37,7 @@ export async function createLabOrder(
   rawInput: CreateLabOrderInput,
   actor: User,
 ) {
-  assertCanAccessLab(actor);
+  await assertCanAccessLab(actor);
   const input = createLabOrderSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
@@ -129,7 +121,7 @@ export async function updateLabOrder(
   rawInput: UpdateLabOrderInput,
   actor: User,
 ) {
-  assertCanAccessLab(actor);
+  await assertCanAccessLab(actor);
   const input = updateLabOrderSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
@@ -284,7 +276,7 @@ export async function getReferenceRange(id: string) {
 }
 
 export async function createReferenceRange(rawInput: CreateRefRangeInput, actor: User) {
-  assertCanManageRefRanges(actor);
+  await assertCanManageRefRanges(actor);
   const input = createRefRangeSchema.parse(rawInput);
 
   const display =
@@ -336,7 +328,7 @@ export async function createReferenceRange(rawInput: CreateRefRangeInput, actor:
 }
 
 export async function updateReferenceRange(id: string, rawInput: UpdateRefRangeInput, actor: User) {
-  assertCanManageRefRanges(actor);
+  await assertCanManageRefRanges(actor);
   const input = updateRefRangeSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
@@ -397,7 +389,7 @@ export async function updateReferenceRange(id: string, rawInput: UpdateRefRangeI
 }
 
 export async function deleteReferenceRange(id: string, actor: User) {
-  assertCanManageRefRanges(actor);
+  await assertCanManageRefRanges(actor);
 
   return prisma.$transaction(async (tx) => {
     const before = await tx.labReferenceRange.findUnique({ where: { id } });

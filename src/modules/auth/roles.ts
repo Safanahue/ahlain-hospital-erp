@@ -99,6 +99,43 @@ export const ROLE_LABELS: Record<Role, string> = {
   BILLING_STAFF: "Billing Staff (Legacy)",
   ACCOUNTS: "Accounts (Legacy)",
   NURSE: "Nurse (Legacy)",
-  LAB_TECHNICIAN: "Lab Technician (Legacy)",
-  PHARMACIST: "Pharmacist (Legacy)",
+  LAB_TECHNICIAN: "Lab Technician",
+  PHARMACIST: "Pharmacist",
 };
+
+/**
+ * Roles an administrator can assign when creating or editing a staff account.
+ * Pharmacy and Laboratory staff must be created with their own role — a
+ * Reception account cannot be given those module permissions by role.
+ */
+export const STAFF_ROLE_OPTIONS: {
+  value: Role;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "ADMIN",
+    label: "Administrator — Full access & settings",
+    description: "Every module, staff accounts, permissions and hospital settings.",
+  },
+  {
+    value: "DOCTOR",
+    label: "Doctor — OPD/IPD care, prescriptions & labs",
+    description: "Patient records, consultations, lab orders and dental care.",
+  },
+  {
+    value: "RECEPTION",
+    label: "Receptionist — Registrations, appointments & billing",
+    description: "Patient registration, appointments, OP visits and front-desk billing.",
+  },
+  {
+    value: "PHARMACIST",
+    label: "Pharmacist — Pharmacy, stock & dispensing",
+    description: "Pharmacy module, medicine stock, prescriptions and dispensing.",
+  },
+  {
+    value: "LAB_TECHNICIAN",
+    label: "Lab Technician — Lab orders, results & reports",
+    description: "Laboratory orders, result entry, report presets and reference ranges.",
+  },
+];

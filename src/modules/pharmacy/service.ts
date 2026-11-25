@@ -1,8 +1,7 @@
 import "server-only";
 import type { User, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { authorize } from "@/modules/auth/authorize";
-import { PHARMACY_ROLES } from "@/modules/auth/roles";
+import { requireModulePermission } from "@/modules/auth/require-permission";
 import { ApiError } from "@/modules/shared/api";
 import { writeAuditLog } from "@/modules/audit/audit";
 import { nextSequence } from "@/modules/billing/service";
@@ -13,9 +12,8 @@ import {
   type CreatePrescriptionInput,
 } from "./schemas";
 
-function assertCanAccessPharmacy(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, PHARMACY_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanAccessPharmacy(actor: User) {
+  await requireModulePermission(actor, "pharmacy.access");
 }
 
 function pharmacyDispenseNo(year: number, value: number): string {
@@ -45,7 +43,7 @@ export async function listMedicines(options?: { search?: string; category?: stri
 }
 
 export async function createMedicine(rawInput: CreateMedicineInput, actor: User) {
-  assertCanAccessPharmacy(actor);
+  await assertCanAccessPharmacy(actor);
   const input = createMedicineSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
@@ -119,7 +117,7 @@ export async function listPrescriptions(options?: {
 }
 
 export async function createPrescription(rawInput: CreatePrescriptionInput, actor: User) {
-  assertCanAccessPharmacy(actor);
+  await assertCanAccessPharmacy(actor);
   const input = createPrescriptionSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
@@ -189,7 +187,7 @@ export async function createPrescription(rawInput: CreatePrescriptionInput, acto
 }
 
 export async function dispensePrescription(id: string, actor: User) {
-  assertCanAccessPharmacy(actor);
+  await assertCanAccessPharmacy(actor);
 
   return prisma.$transaction(async (tx) => {
     const rx = await tx.prescription.findUnique({

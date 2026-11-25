@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, KeyRound, Loader2, Pencil, Plus, ShieldAlert, ShieldCheck, UserX } from "lucide-react";
 import type { Role } from "@prisma/client";
-import { ROLE_LABELS } from "@/modules/auth/roles";
+import { ROLE_LABELS, STAFF_ROLE_OPTIONS } from "@/modules/auth/roles";
 import {
   PERMISSION_CATALOG,
   PERMISSION_GROUPS,
@@ -293,6 +293,16 @@ function StaffDialog({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Legacy accounts keep their current role visible even though new accounts
+  // can only be created with an assignable role.
+  const roleOptions =
+    target && !STAFF_ROLE_OPTIONS.some((option) => option.value === target.role)
+      ? [
+          ...STAFF_ROLE_OPTIONS,
+          { value: target.role, label: ROLE_LABELS[target.role], description: "" },
+        ]
+      : STAFF_ROLE_OPTIONS;
+
   const title = isCreate
     ? "Add staff account"
     : isEdit
@@ -487,14 +497,11 @@ function StaffDialog({
                     disabled={isSelf}
                     onChange={(e) => setRole(e.target.value as Role)}
                   >
-                    <option value="ADMIN">Administrator — Full Access & Settings</option>
-                    <option value="DOCTOR">Doctor — OPD/IPD Care, Prescriptions & Labs</option>
-                    <option value="RECEPTION">Receptionist — Registrations, Appointments & Billing</option>
-                    {target?.role && !["ADMIN", "DOCTOR", "RECEPTION"].includes(target.role) ? (
-                      <option value={target.role}>
-                        {ROLE_LABELS[target.role]}
+                    {roleOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
-                    ) : null}
+                    ))}
                   </select>
                   {isSelf ? (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -502,7 +509,9 @@ function StaffDialog({
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Active hospital access is standardized to Administrator, Doctor, and Receptionist roles.
+                      Pharmacy staff need the Pharmacist role; laboratory staff need the Lab
+                      Technician role. Fine-tune individual permissions afterwards with the
+                      Permissions button.
                     </p>
                   )}
                 </div>

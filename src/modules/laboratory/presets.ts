@@ -3,8 +3,7 @@ import type { Prisma, User } from "@prisma/client";
 import type { z } from "zod";
 import { Prisma as PrismaNS } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { authorize } from "@/modules/auth/authorize";
-import { LAB_PRESET_MANAGE_ROLES, LAB_PRESET_VIEW_ROLES } from "@/modules/auth/roles";
+import { requireModulePermission } from "@/modules/auth/require-permission";
 import { ApiError } from "@/modules/shared/api";
 import { writeAuditLog } from "@/modules/audit/audit";
 import {
@@ -30,14 +29,12 @@ export type TemplateWithParameters = Prisma.LabReportTemplateGetPayload<{
   include: typeof templateInclude;
 }>;
 
-function assertCanView(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_PRESET_VIEW_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanView(actor: User) {
+  await requireModulePermission(actor, "lab.access");
 }
 
-function assertCanManage(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_PRESET_MANAGE_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanManage(actor: User) {
+  await requireModulePermission(actor, "lab.masters");
 }
 
 function parameterCreateData(input: ParsedTemplateParameter[]) {
@@ -89,12 +86,12 @@ export async function getTemplate(id: string): Promise<TemplateWithParameters | 
 }
 
 export async function getTemplatesForViewer(actor: User): Promise<TemplateWithParameters[]> {
-  assertCanView(actor);
+  await assertCanView(actor);
   return listTemplates({ includeInactive: true });
 }
 
 export async function createTemplate(rawInput: CreateTemplateInput, actor: User) {
-  assertCanManage(actor);
+  await assertCanManage(actor);
   const input = createTemplateSchema.parse(rawInput);
 
   try {
@@ -136,7 +133,7 @@ export async function createTemplate(rawInput: CreateTemplateInput, actor: User)
 }
 
 export async function updateTemplate(id: string, rawInput: UpdateTemplateInput, actor: User) {
-  assertCanManage(actor);
+  await assertCanManage(actor);
   const input = updateTemplateSchema.parse(rawInput);
 
   try {
@@ -197,7 +194,7 @@ export async function updateTemplate(id: string, rawInput: UpdateTemplateInput, 
 }
 
 export async function deleteTemplate(id: string, actor: User) {
-  assertCanManage(actor);
+  await assertCanManage(actor);
 
   return prisma.$transaction(async (tx) => {
     const before = await tx.labReportTemplate.findUnique({
@@ -232,7 +229,7 @@ export async function duplicateTemplate(
   rawInput: DuplicateTemplateInput,
   actor: User,
 ) {
-  assertCanManage(actor);
+  await assertCanManage(actor);
   const input = duplicateTemplateSchema.parse(rawInput ?? {});
 
   const source = await prisma.labReportTemplate.findUnique({ where: { id }, include: templateInclude });

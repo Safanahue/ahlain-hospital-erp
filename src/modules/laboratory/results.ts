@@ -1,8 +1,7 @@
 import "server-only";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { authorize } from "@/modules/auth/authorize";
-import { LAB_ORDER_ROLES } from "@/modules/auth/roles";
+import { requireModulePermission } from "@/modules/auth/require-permission";
 import { ApiError } from "@/modules/shared/api";
 import { writeAuditLog } from "@/modules/audit/audit";
 import { saveResultsSchema, type SaveResultsInput } from "./schemas";
@@ -13,9 +12,8 @@ import {
   resolveRangeForPatient,
 } from "./ranges";
 
-function assertCanAccessLab(actor: User) {
-  const result = authorize({ role: actor.role, active: actor.active }, LAB_ORDER_ROLES);
-  if (!result.ok) throw new ApiError(result.status, result.message);
+async function assertCanAccessLab(actor: User) {
+  await requireModulePermission(actor, "lab.results");
 }
 
 /**
@@ -28,7 +26,7 @@ export async function saveOrderResults(
   rawInput: SaveResultsInput,
   actor: User,
 ) {
-  assertCanAccessLab(actor);
+  await assertCanAccessLab(actor);
   const input = saveResultsSchema.parse(rawInput);
 
   return prisma.$transaction(async (tx) => {
