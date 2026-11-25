@@ -63,7 +63,7 @@ export default async function DentalPage({
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [encounters, patients, dentists, dentalServices] = await Promise.all([
-    listDentalEncounters(hospitalRange(fromKey, toKey)),
+    listDentalEncounters(hasDateFilter ? hospitalRange(fromKey, toKey) : undefined),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -125,10 +125,16 @@ export default async function DentalPage({
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Showing encounters from{" "}
-            {fromKey === toKey
-              ? formatDateKeyLabel(fromKey)
-              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {hasDateFilter ? (
+              <>
+                Showing encounters from{" "}
+                {fromKey === toKey
+                  ? formatDateKeyLabel(fromKey)
+                  : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+              </>
+            ) : (
+              <>Showing all recorded encounters</>
+            )}
           </p>
         </div>
       </form>

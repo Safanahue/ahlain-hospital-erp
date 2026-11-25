@@ -61,10 +61,12 @@ export default async function OpPage({
   const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
   const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
   const range = hospitalRange(fromKey, toKey);
+  // Filter only when the user submits a date range; the default view must show
+  // the visits that are actually stored, not just today's.
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [visits, patients, doctors] = await Promise.all([
-    listOpVisits(range),
+    listOpVisits(hasDateFilter ? range : undefined),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -83,10 +85,14 @@ export default async function OpPage({
         <div>
           <h1 className="text-xl font-bold text-navy">OP Management</h1>
           <p className="page-note">
-            {visits.length} visit{visits.length === 1 ? "" : "s"} from{" "}
-            {fromKey === toKey
-              ? formatDateKeyLabel(fromKey)
-              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {visits.length} visit{visits.length === 1 ? "" : "s"}{" "}
+            {hasDateFilter
+              ? `from ${
+                  fromKey === toKey
+                    ? formatDateKeyLabel(fromKey)
+                    : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`
+                }`
+              : "— all recorded visits"}
             {" "}· Sequential OPD queue
           </p>
         </div>
