@@ -64,10 +64,12 @@ export default async function LaboratoryPage({
 
   const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
   const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
+  // Only filter when a date range is supplied; defaulting to "today" hid all
+  // older requisitions from the queue.
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [orders, patients, doctors, labServices, initialRanges, templates] = await Promise.all([
-    listLabOrders(hospitalRange(fromKey, toKey)),
+    listLabOrders(hasDateFilter ? hospitalRange(fromKey, toKey) : undefined, { take: 200 }),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -119,10 +121,14 @@ export default async function LaboratoryPage({
         <div>
           <h1 className="text-xl font-bold text-navy">Laboratory Module</h1>
           <p className="page-note">
-            {orders.length} diagnostic investigation{orders.length === 1 ? "" : "s"} from{" "}
-            {fromKey === toKey
-              ? formatDateKeyLabel(fromKey)
-              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {orders.length} diagnostic investigation{orders.length === 1 ? "" : "s"}{" "}
+            {hasDateFilter
+              ? `from ${
+                  fromKey === toKey
+                    ? formatDateKeyLabel(fromKey)
+                    : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`
+                }`
+              : "— latest 200 orders (no date filter)"}
             {" "}· Sample tracking,
             preset-based results entry &amp; printable reports
           </p>
@@ -165,9 +171,12 @@ export default async function LaboratoryPage({
             <button type="submit" className="btn btn-primary">
               Apply date filter
             </button>
+            <Link href={`/laboratory?from=${todayKey()}&to=${todayKey()}`} className="btn btn-secondary">
+              Today only
+            </Link>
             {hasDateFilter ? (
               <Link href="/laboratory" className="btn btn-secondary">
-                Today
+                Show all
               </Link>
             ) : null}
           </div>

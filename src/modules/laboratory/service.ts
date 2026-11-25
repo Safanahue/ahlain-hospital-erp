@@ -79,9 +79,13 @@ export async function createLabOrder(
   });
 }
 
-export async function listLabOrders(range?: { gte: Date; lt: Date }) {
+export async function listLabOrders(
+  range?: { gte: Date; lt: Date },
+  options?: { take?: number },
+) {
   return prisma.labOrder.findMany({
     ...(range ? { where: { createdAt: range } } : {}),
+    ...(options?.take ? { take: options.take } : {}),
     orderBy: { createdAt: "desc" },
     include: {
       patient: { select: { id: true, name: true, uhid: true, phone: true, age: true, gender: true } },

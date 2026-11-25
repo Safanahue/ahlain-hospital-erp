@@ -88,6 +88,7 @@ export async function listPrescriptions(options?: {
   status?: string;
   patientId?: string;
   range?: { gte: Date; lt: Date };
+  take?: number;
 }) {
   const where: Prisma.PrescriptionWhereInput = {};
   if (options?.status && options.status !== "ALL") {
@@ -112,7 +113,7 @@ export async function listPrescriptions(options?: {
       },
     },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: options?.take ?? 50,
   });
 }
 

@@ -70,11 +70,13 @@ export default async function PharmacyPage({
 
   const fromKey = isValidDateKey(first(sp.from)) ? (first(sp.from) as string) : todayKey();
   const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
+  // Only filter when the user actually asks for a date range. Defaulting to
+  // "today" hid every earlier prescription from the queue.
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
   const [medicines, prescriptions, patients] = await Promise.all([
     listMedicines(),
-    listPrescriptions({ range: hospitalRange(fromKey, toKey) }),
+    listPrescriptions(hasDateFilter ? { range: hospitalRange(fromKey, toKey) } : { take: 100 }),
     prisma.patient.findMany({
       take: 100,
       orderBy: { name: "asc" },
@@ -131,17 +133,26 @@ export default async function PharmacyPage({
             <button type="submit" className="btn btn-primary">
               Apply date filter
             </button>
+            <Link href={`/pharmacy?from=${todayKey()}&to=${todayKey()}`} className="btn btn-secondary">
+              Today only
+            </Link>
             {hasDateFilter ? (
               <Link href="/pharmacy" className="btn btn-secondary">
-                Today
+                Show all
               </Link>
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Showing prescriptions from{" "}
-            {fromKey === toKey
-              ? formatDateKeyLabel(fromKey)
-              : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+            {hasDateFilter ? (
+              <>
+                Showing prescriptions from{" "}
+                {fromKey === toKey
+                  ? formatDateKeyLabel(fromKey)
+                  : `${formatDateKeyLabel(fromKey)} – ${formatDateKeyLabel(toKey)}`}
+              </>
+            ) : (
+              <>Latest 100 prescriptions (no date filter)</>
+            )}
           </p>
         </div>
       </form>
