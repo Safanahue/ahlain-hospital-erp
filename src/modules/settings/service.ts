@@ -372,6 +372,31 @@ export async function setUserPermissions(
   });
 }
 
+/**
+ * Writes an uploaded image to `public/uploads`.
+ *
+ * On serverless hosts (Netlify) the deployment filesystem is read-only, so
+ * the write cannot succeed there. Report that as a normal validation error
+ * instead of a 500; the bundled `/brand` images stay in use.
+ */
+async function storeUpload(buffer: Buffer, fileName: string): Promise<string> {
+  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  try {
+    await mkdir(uploadDir, { recursive: true });
+    await writeFile(path.join(uploadDir, fileName), buffer);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EROFS" || code === "EACCES" || code === "EPERM") {
+      throw new ApiError(
+        400,
+        "This hosting environment cannot store uploaded images. The bundled brand images are used instead.",
+      );
+    }
+    throw error;
+  }
+  return `/uploads/${fileName}`;
+}
+
 const ALLOWED_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -389,12 +414,8 @@ export async function saveUpiQrImage(file: File, actor: User) {
   }
 
   const fileName = `upi-qr-${Date.now()}.${extension}`;
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadDir, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(uploadDir, fileName), buffer);
-
-  const url = `/uploads/${fileName}`;
+  const url = await storeUpload(buffer, fileName);
 
   await prisma.$transaction(async (tx) => {
     const before = await tx.hospitalSettings.findFirst();
@@ -439,12 +460,8 @@ async function saveBrandingImage(file: File, actor: User, kind: BrandingImage) {
   }
 
   const fileName = `${kind.prefix}-${Date.now()}.${extension}`;
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadDir, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(uploadDir, fileName), buffer);
-
-  const url = `/uploads/${fileName}`;
+  const url = await storeUpload(buffer, fileName);
 
   await prisma.$transaction(async (tx) => {
     const before = await tx.hospitalSettings.findFirst();
