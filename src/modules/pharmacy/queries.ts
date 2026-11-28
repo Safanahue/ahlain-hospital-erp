@@ -111,47 +111,53 @@ export type PharmacyStats = {
   stockUnits: number;
 };
 
-/** KPI numbers for the pharmacy dashboard (single round trip of counts). */
+/**
+ * KPI numbers for the pharmacy dashboard.
+ *
+ * One statement, not eight: the pharmacy page is a dynamic render on a small
+ * instance, so every extra round trip to the database is paid on each load.
+ */
 export async function getPharmacyStats(): Promise<PharmacyStats> {
   const now = startOfDay(new Date());
   const nearExpiry = new Date(now.getTime() + NEAR_EXPIRY_DAYS * DAY_MS);
 
-  const [
-    catalogueItems,
-    lowStock,
-    outOfStock,
-    expiringSoon,
-    expired,
-    pendingPrescriptions,
-    dispensedPrescriptions,
-    stockAgg,
-  ] = await Promise.all([
-    prisma.medicine.count({ where: { active: true } }),
-    prisma.medicine.count({
-      where: { active: true, stockQuantity: { gt: 0, lt: LOW_STOCK_THRESHOLD } },
-    }),
-    prisma.medicine.count({ where: { active: true, stockQuantity: { lte: 0 } } }),
-    prisma.medicine.count({
-      where: { active: true, expiryDate: { gte: now, lte: nearExpiry } },
-    }),
-    prisma.medicine.count({ where: { active: true, expiryDate: { lt: now } } }),
-    prisma.prescription.count({ where: { status: "PENDING" } }),
-    prisma.prescription.count({ where: { status: "DISPENSED" } }),
-    prisma.medicine.aggregate({
-      where: { active: true },
-      _sum: { stockQuantity: true },
-    }),
-  ]);
+  const [row] = await prisma.$queryRaw<
+    {
+      catalogueItems: number;
+      lowStock: number;
+      outOfStock: number;
+      expiringSoon: number;
+      expired: number;
+      stockUnits: number;
+      pendingPrescriptions: number;
+      dispensedPrescriptions: number;
+    }[]
+  >`
+    SELECT
+      count(*) FILTER (WHERE m."active")::int AS "catalogueItems",
+      count(*) FILTER (
+        WHERE m."active" AND m."stockQuantity" > 0 AND m."stockQuantity" < ${LOW_STOCK_THRESHOLD}
+      )::int AS "lowStock",
+      count(*) FILTER (WHERE m."active" AND m."stockQuantity" <= 0)::int AS "outOfStock",
+      count(*) FILTER (
+        WHERE m."active" AND m."expiryDate" >= ${now} AND m."expiryDate" <= ${nearExpiry}
+      )::int AS "expiringSoon",
+      count(*) FILTER (WHERE m."active" AND m."expiryDate" < ${now})::int AS "expired",
+      coalesce(sum(m."stockQuantity") FILTER (WHERE m."active"), 0)::int AS "stockUnits",
+      (SELECT count(*) FROM "Prescription" WHERE "status" = 'PENDING')::int AS "pendingPrescriptions",
+      (SELECT count(*) FROM "Prescription" WHERE "status" = 'DISPENSED')::int AS "dispensedPrescriptions"
+    FROM "Medicine" m
+  `;
 
   return {
-    catalogueItems,
-    lowStock,
-    outOfStock,
-    expiringSoon,
-    expired,
-    pendingPrescriptions,
-    dispensedPrescriptions,
-    stockUnits: stockAgg._sum.stockQuantity ?? 0,
+    catalogueItems: row?.catalogueItems ?? 0,
+    lowStock: row?.lowStock ?? 0,
+    outOfStock: row?.outOfStock ?? 0,
+    expiringSoon: row?.expiringSoon ?? 0,
+    expired: row?.expired ?? 0,
+    pendingPrescriptions: row?.pendingPrescriptions ?? 0,
+    dispensedPrescriptions: row?.dispensedPrescriptions ?? 0,
+    stockUnits: row?.stockUnits ?? 0,
   };
 }
 

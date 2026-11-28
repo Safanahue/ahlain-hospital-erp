@@ -292,6 +292,7 @@ export default function Sidebar({
                           <li key={item.href}>
                             <Link
                               href={item.href}
+                              prefetch={false}
                               title={item.label}
                               className={cn(
                                 "flex items-center justify-center rounded-lg p-2.5 transition-colors",
@@ -348,6 +349,7 @@ export default function Sidebar({
                                   <li key={child.href}>
                                     <Link
                                       href={child.href}
+                                      prefetch={false}
                                       onClick={onCloseMobile}
                                       aria-current={childActive ? "page" : undefined}
                                       className={cn(
@@ -373,6 +375,7 @@ export default function Sidebar({
                       <li key={item.href}>
                         <Link
                           href={item.href}
+                          prefetch={false}
                           onClick={onCloseMobile}
                           title={!isExpanded ? item.label : undefined}
                           aria-current={active ? "page" : undefined}
