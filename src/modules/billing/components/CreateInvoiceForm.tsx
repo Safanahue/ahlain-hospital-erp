@@ -29,20 +29,12 @@ const CATEGORIES = [
   { value: "OTHER_CHARGES", label: "Other Charges" },
 ];
 
-type Patient = { id: string; name: string; uhid: string; phone: string };
 type ItemRow = { key: number; category: string; description: string; amount: string };
 
-export default function CreateInvoiceForm({
-  patients,
-}: {
-  patients: Patient[];
-}) {
+export default function CreateInvoiceForm() {
   const router = useRouter();
   const [patientId, setPatientId] = useState("");
-  const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(() => {
-    const found = patients[0];
-    return null;
-  });
+  const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
   const [department, setDepartment] = useState("OP");
   const [billType, setBillType] = useState("GENERAL");
   const [items, setItems] = useState<ItemRow[]>([
@@ -128,7 +120,6 @@ export default function CreateInvoiceForm({
             <PatientAutocomplete
               id="patientId"
               selectedPatient={selectedPatient}
-              initialPatients={patients}
               onSelect={(p) => {
                 setSelectedPatient(p);
                 setPatientId(p?.id ?? "");

@@ -2,6 +2,7 @@ import type { Patient, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeOutstanding } from "@/modules/billing/outstanding";
 import type { PatientListQuery } from "./schemas";
+import { buildPatientSearchFilter, normalizePatientQuery } from "./search-filter";
 
 export type PatientListResult = {
   items: Patient[];
@@ -17,31 +18,9 @@ export async function listPatients(
 ): Promise<PatientListResult> {
   const { page, pageSize, q, gender } = query;
 
-  const tokens = (q ?? "").trim().split(/\s+/).filter(Boolean);
-  const qFilter: Prisma.PatientWhereInput =
-    tokens.length > 1
-      ? {
-          AND: tokens.map((t) => ({
-            OR: [
-              { name: { contains: t, mode: "insensitive" } },
-              { uhid: { contains: t, mode: "insensitive" } },
-              { phone: { contains: t } },
-            ],
-          })),
-        }
-      : tokens.length === 1
-        ? {
-            OR: [
-              { name: { contains: tokens[0], mode: "insensitive" } },
-              { uhid: { contains: tokens[0], mode: "insensitive" } },
-              { phone: { contains: tokens[0] } },
-            ],
-          }
-        : {};
-
   const where: Prisma.PatientWhereInput = {
     ...(gender ? { gender } : {}),
-    ...qFilter,
+    ...buildPatientSearchFilter(q),
   };
 
   const [total, rows] = await Promise.all([
@@ -77,56 +56,78 @@ export type PatientSearchResult = {
   emergencyContactPhone: string | null;
 };
 
-/** Fast live search for autocomplete matching name, UHID or phone across partial tokens. */
+const PATIENT_SEARCH_SELECT = {
+  id: true,
+  uhid: true,
+  name: true,
+  phone: true,
+  age: true,
+  gender: true,
+  dob: true,
+  bloodGroup: true,
+  address: true,
+  emergencyContactName: true,
+  emergencyContactPhone: true,
+} satisfies Prisma.PatientSelect;
+
+/** Promotes exact and prefix matches above mid-name matches. */
+function relevanceRank(
+  patient: PatientSearchResult,
+  term: string,
+  tokens: string[],
+): number {
+  const name = patient.name.toLowerCase();
+  const uhid = patient.uhid.toLowerCase();
+  const phone = patient.phone.toLowerCase();
+
+  if (uhid === term || phone === term) return 0;
+  if (name === term) return 1;
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.some((part) => tokens.some((token) => part.startsWith(token)))) {
+    return 2;
+  }
+  if (name.startsWith(term)) return 3;
+  if (uhid.startsWith(term)) return 4;
+  if (phone.startsWith(term)) return 5;
+  return 6;
+}
+
+/**
+ * Live autocomplete search over every registered patient: partial,
+ * case-insensitive matches on the full name (first, middle and last name),
+ * UHID and phone. Accepts a single character and never needs the full name.
+ * Results are ranked so the closest matches appear first, and only a bounded
+ * page is fetched from PostgreSQL.
+ */
 export async function searchPatients(
   query: string,
   limit = 10,
 ): Promise<PatientSearchResult[]> {
-  const trimmed = (query ?? "").trim();
-  if (trimmed.length < 2) {
-    return [];
-  }
+  const term = normalizePatientQuery(query).toLowerCase();
+  if (!term) return [];
 
-  const tokens = trimmed.split(/\s+/).filter(Boolean);
-  const where: Prisma.PatientWhereInput =
-    tokens.length > 1
-      ? {
-          AND: tokens.map((t) => ({
-            OR: [
-              { name: { contains: t, mode: "insensitive" } },
-              { uhid: { contains: t, mode: "insensitive" } },
-              { phone: { contains: t } },
-            ],
-          })),
-        }
-      : {
-          OR: [
-            { name: { contains: tokens[0], mode: "insensitive" } },
-            { uhid: { contains: tokens[0], mode: "insensitive" } },
-            { phone: { contains: tokens[0] } },
-          ],
-        };
-
+  const capped = Math.min(Math.max(1, Math.trunc(Number(limit)) || 10), 50);
   const rows = await prisma.patient.findMany({
-    where,
-    take: Math.min(Math.max(1, limit), 50),
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      uhid: true,
-      name: true,
-      phone: true,
-      age: true,
-      gender: true,
-      dob: true,
-      bloodGroup: true,
-      address: true,
-      emergencyContactName: true,
-      emergencyContactPhone: true,
-    },
+    where: buildPatientSearchFilter(term),
+    // Fetch a small multiple of the page so prefix matches can be promoted
+    // without ever loading the directory into memory.
+    take: Math.min(capped * 4, 200),
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    select: PATIENT_SEARCH_SELECT,
   });
 
-  return rows as PatientSearchResult[];
+  const tokens = term.split(" ");
+  return rows
+    .map((row) => {
+      const patient = row as PatientSearchResult;
+      return {
+        patient,
+        rank: relevanceRank(patient, term, tokens),
+      };
+    })
+    .sort((a, b) => a.rank - b.rank || a.patient.name.localeCompare(b.patient.name))
+    .slice(0, capped)
+    .map(({ patient }) => patient);
 }
 
 export type PatientInvoiceRow = {

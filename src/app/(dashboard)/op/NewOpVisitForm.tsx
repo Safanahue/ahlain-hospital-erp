@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import { Plus, Loader2 } from "lucide-react";
 import PatientAutocomplete, { type PatientSearchResult } from "@/modules/patients/components/PatientAutocomplete";
 
-type PatientOption = { id: string; name: string; uhid: string };
 type DoctorOption = { id: string; name: string };
 
 export default function NewOpVisitForm({
-  patients,
   doctors,
 }: {
-  patients: PatientOption[];
   doctors: DoctorOption[];
 }) {
   const router = useRouter();
@@ -72,7 +69,6 @@ export default function NewOpVisitForm({
             <PatientAutocomplete
               id="op-patient"
               selectedPatient={selectedPatient}
-              initialPatients={patients as PatientSearchResult[]}
               onSelect={(p) => {
                 setSelectedPatient(p);
                 setPatientId(p?.id ?? "");

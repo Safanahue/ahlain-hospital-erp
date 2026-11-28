@@ -1,21 +1,59 @@
 import { z } from "zod";
 
+const labTestInputSchema = z.object({
+  testName: z.string().trim().min(1, "Test name is required"),
+  testCode: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  sampleType: z.string().trim().optional(),
+  priceRupees: z.coerce.number().min(0).default(0),
+  templateId: z.string().nullable().optional(),
+});
+
 export const createLabOrderSchema = z.object({
   patientId: z.string().min(1, "Select a patient"),
   orderedById: z.string().min(1, "Select ordering doctor"),
-  testName: z.string().trim().min(1, "Test name is required"),
+  testName: z.string().trim().optional(),
   sampleType: z.string().trim().optional(),
   costRupees: z.coerce.number().int().min(0).default(0),
+  // Multi-test registration: one accession, one collection, many investigations.
+  tests: z.array(labTestInputSchema).max(40).optional(),
+  department: z.string().trim().optional(),
+  priority: z.enum(["ROUTINE", "URGENT", "STAT"]).default("ROUTINE"),
+  sampleId: z.string().trim().optional(),
+  raiseInvoice: z.boolean().default(true),
+  notes: z.string().trim().max(1000).optional(),
+}).refine(
+  (data) => Boolean(data.testName?.trim()) || Boolean(data.tests?.length),
+  { message: "Select at least one test", path: ["tests"] },
+);
+
+export const labOrderListQuerySchema = z.object({
+  q: z.string().trim().optional(),
+  status: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  from: z.string().trim().optional(),
+  to: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(5).max(100).default(20),
 });
 
-export type CreateLabOrderInput = z.infer<typeof createLabOrderSchema>;
+export type LabOrderListQuery = z.infer<typeof labOrderListQuerySchema>;
+
+// Input type keeps schema defaults optional for callers (API/page/tests).
+export type CreateLabOrderInput = z.input<typeof createLabOrderSchema>;
 
 export const updateLabOrderSchema = z.object({
   status: z.enum(["ORDERED", "SAMPLE_COLLECTED", "RESULT_ENTERED", "VERIFIED", "CANCELLED"]),
   sampleType: z.string().trim().optional(),
+  sampleId: z.string().trim().optional(),
   resultValue: z.string().trim().optional(),
   referenceRange: z.string().trim().optional(),
   findings: z.string().trim().optional(),
+  rejectionReason: z.string().trim().max(300).optional(),
+});
+
+export const rejectSampleSchema = z.object({
+  reason: z.string().trim().min(3, "Give a reason for rejecting the sample").max(300),
 });
 
 export type UpdateLabOrderInput = z.infer<typeof updateLabOrderSchema>;

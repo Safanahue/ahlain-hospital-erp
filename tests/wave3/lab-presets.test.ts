@@ -63,6 +63,13 @@ afterAll(async () => {
   const userIds = [admin.id, reception.id, doctor.id];
   await prisma.auditLog.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.labOrderResult.deleteMany({ where: { orderId: { in: createdOrderIds } } });
+  // createLabOrder now raises the LAB invoice in the same transaction.
+  await prisma.labOrder.updateMany({
+    where: { id: { in: createdOrderIds } },
+    data: { invoiceId: null },
+  });
+  await prisma.invoiceItem.deleteMany({ where: { invoice: { patientId: patient.id } } });
+  await prisma.invoice.deleteMany({ where: { patientId: patient.id } });
   await prisma.labOrder.deleteMany({ where: { id: { in: createdOrderIds } } });
   await prisma.labReportTemplate.deleteMany({ where: { id: { in: createdTemplateIds } } });
   await prisma.patient.deleteMany({ where: { uhid: `AH-PRESET-${stamp}` } });

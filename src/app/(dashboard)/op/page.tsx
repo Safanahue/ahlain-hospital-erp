@@ -65,13 +65,8 @@ export default async function OpPage({
   // the visits that are actually stored, not just today's.
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
-  const [visits, patients, doctors] = await Promise.all([
+  const [visits, doctors] = await Promise.all([
     listOpVisits(hasDateFilter ? range : undefined),
-    prisma.patient.findMany({
-      take: 100,
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, uhid: true },
-    }),
     prisma.user.findMany({
       where: { role: "DOCTOR", active: true },
       orderBy: { name: "asc" },
@@ -99,7 +94,7 @@ export default async function OpPage({
       </div>
 
       {/* Register new OP visit */}
-      <NewOpVisitForm patients={patients} doctors={doctors} />
+      <NewOpVisitForm doctors={doctors} />
 
       {/* OP visit date filter — applied server-side */}
       <form method="GET" action="/op" className="card p-4">

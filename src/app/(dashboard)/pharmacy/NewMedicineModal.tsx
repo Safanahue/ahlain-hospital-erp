@@ -34,9 +34,9 @@ export default function NewMedicineModal() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.message || "Failed to add medicine");
+        throw new Error(data.error || "Failed to add medicine");
       }
 
       setOpen(false);

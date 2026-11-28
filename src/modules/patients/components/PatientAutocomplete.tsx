@@ -35,7 +35,15 @@ export interface PatientAutocompleteProps {
   minChars?: number;
   debounceMs?: number;
   showDetailsCard?: boolean;
+  /** Keep the input populated (with the patient's name) after a selection. */
+  keepQueryOnSelect?: boolean;
+  /** Submit the closest form after a patient is picked (filter-style inputs). */
+  submitFormOnSelect?: boolean;
+  /** Mirror the typed text into the hidden input instead of a patient id. */
+  hiddenFromQuery?: boolean;
 }
+
+const EMPTY_PATIENTS: PatientSearchResult[] = [];
 
 export default function PatientAutocomplete({
   id,
@@ -43,7 +51,7 @@ export default function PatientAutocomplete({
   placeholder = "Search patient by name, UHID, or phone…",
   defaultValue = "",
   selectedPatient = null,
-  initialPatients = [],
+  initialPatients = EMPTY_PATIENTS,
   onSelect,
   onNavigateOnSelect,
   required = false,
@@ -51,9 +59,12 @@ export default function PatientAutocomplete({
   className,
   inputClassName,
   autoFocus = false,
-  minChars = 2,
+  minChars = 1,
   debounceMs = 250,
   showDetailsCard = true,
+  keepQueryOnSelect = false,
+  submitFormOnSelect = false,
+  hiddenFromQuery = false,
 }: PatientAutocompleteProps) {
   const generatedId = useId();
   const inputId = id || generatedId;
@@ -69,6 +80,13 @@ export default function PatientAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Keep the server-provided fallback list in a ref: depending on the array
+  // identity in the fetch callback caused a fresh search on every render.
+  const initialPatientsRef = useRef(initialPatients);
+  useEffect(() => {
+    initialPatientsRef.current = initialPatients;
+  }, [initialPatients]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -86,7 +104,8 @@ export default function PatientAutocomplete({
     async (searchTerm: string) => {
       const trimmed = searchTerm.trim();
       if (trimmed.length < minChars) {
-        setResults(initialPatients.length > 0 ? initialPatients.slice(0, 8) : []);
+        const fallback = initialPatientsRef.current;
+        setResults(fallback.length > 0 ? fallback.slice(0, 8) : []);
         setLoading(false);
         setHasSearched(false);
         return;
@@ -120,20 +139,22 @@ export default function PatientAutocomplete({
         }
       }
     },
-    [minChars, initialPatients]
+    [minChars]
   );
 
-  // Debounced input change handler
+  // Debounced input change handler (250 ms by default)
   useEffect(() => {
     if (selectedPatient && !query) {
       // Don't search if patient is already chosen and input is clear
       return;
     }
     const timer = setTimeout(() => {
-      if (query.trim().length >= minChars) {
+      const trimmed = query.trim();
+      if (trimmed.length >= minChars) {
         performSearch(query);
-      } else if (query.trim().length === 0 && initialPatients.length > 0) {
-        setResults(initialPatients.slice(0, 8));
+      } else if (trimmed.length === 0) {
+        const fallback = initialPatientsRef.current;
+        setResults(fallback.length > 0 ? fallback.slice(0, 8) : []);
         setHasSearched(false);
       } else {
         setResults([]);
@@ -142,7 +163,7 @@ export default function PatientAutocomplete({
     }, debounceMs);
 
     return () => clearTimeout(timer);
-  }, [query, minChars, debounceMs, performSearch, selectedPatient, initialPatients]);
+  }, [query, minChars, debounceMs, performSearch, selectedPatient]);
 
   // Keep highlighted item visible when scrolling via arrow keys
   useEffect(() => {
@@ -159,9 +180,14 @@ export default function PatientAutocomplete({
     if (onNavigateOnSelect) {
       onNavigateOnSelect(patient);
     }
-    setQuery("");
+    setQuery(keepQueryOnSelect ? patient.name : "");
     setIsOpen(false);
     setHighlightedIndex(-1);
+    setHasSearched(false);
+    if (submitFormOnSelect) {
+      // Let React commit the new value before the form is submitted.
+      setTimeout(() => inputRef.current?.form?.requestSubmit(), 0);
+    }
   }
 
   function handleClear() {
@@ -208,7 +234,13 @@ export default function PatientAutocomplete({
         <input
           type="hidden"
           name={name}
-          value={selectedPatient ? selectedPatient.id : ""}
+          value={
+            selectedPatient
+              ? selectedPatient.id
+              : hiddenFromQuery
+                ? query.trim()
+                : ""
+          }
           required={required}
         />
       )}

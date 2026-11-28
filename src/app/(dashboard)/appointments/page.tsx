@@ -111,15 +111,10 @@ export default async function AppointmentsPage({
     ? parsed.data
     : appointmentListQuerySchema.parse({ page: 1, pageSize: 15 });
 
-  // Parallel fetch: Appointments, Patients, Doctors, and Live KPI statistics
-  const [result, patients, doctors, totalAll, todayAll, checkedInAll, doneAll] =
+  // Parallel fetch: Appointments, Doctors, and Live KPI statistics
+  const [result, doctors, totalAll, todayAll, checkedInAll, doneAll] =
     await Promise.all([
       listAppointments(query),
-      prisma.patient.findMany({
-        take: 100,
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, uhid: true },
-      }),
       prisma.user.findMany({
         where: { role: "DOCTOR", active: true },
         orderBy: { name: "asc" },
@@ -234,7 +229,7 @@ export default async function AppointmentsPage({
       </div>
 
       {/* Book Appointment Form Component */}
-      <BookAppointmentForm patients={patients} doctors={doctors} />
+      <BookAppointmentForm doctors={doctors} />
 
       {/* Appointments Management Card */}
       <section className="card overflow-hidden border border-slate-200 shadow-xs">

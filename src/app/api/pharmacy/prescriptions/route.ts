@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireApiPermission } from "@/modules/auth/guards";
-import { handleApiError, parseBody } from "@/modules/shared/api";
-import { createPrescriptionSchema } from "@/modules/pharmacy/schemas";
-import { createPrescription, listPrescriptions } from "@/modules/pharmacy/service";
+import { handleApiError, parseBody, parseQuery } from "@/modules/shared/api";
+import {
+  createPrescriptionSchema,
+  prescriptionListQuerySchema,
+} from "@/modules/pharmacy/schemas";
+import { createPrescription } from "@/modules/pharmacy/service";
+import { listPrescriptionsPaged } from "@/modules/pharmacy/queries";
 
+/** GET /api/pharmacy/prescriptions — paginated dispensing queue. */
 export async function GET(req: Request) {
   try {
     await requireApiPermission("pharmacy.access");
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status") || undefined;
-    const patientId = searchParams.get("patientId") || undefined;
-
-    const prescriptions = await listPrescriptions({ status, patientId });
-    return NextResponse.json({ items: prescriptions, total: prescriptions.length });
+    const query = parseQuery(prescriptionListQuerySchema, req);
+    const result = await listPrescriptionsPaged(query);
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error);
   }

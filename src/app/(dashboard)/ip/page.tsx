@@ -63,16 +63,11 @@ export default async function IpPage({
     ? parsed.data
     : admissionListQuerySchema.parse({});
 
-  const [result, overview, wards, beds, patients, doctors] = await Promise.all([
+  const [result, overview, wards, beds, doctors] = await Promise.all([
     listAdmissions(query),
     getIpOverview(),
     listWards(),
     listAvailableBeds(),
-    prisma.patient.findMany({
-      take: 100,
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, uhid: true, age: true, gender: true },
-    }),
     prisma.user.findMany({
       where: { role: "DOCTOR", active: true },
       orderBy: { name: "asc" },
@@ -125,13 +120,6 @@ export default async function IpPage({
       </div>
 
       <NewAdmissionForm
-        patients={patients.map((patient) => ({
-          id: patient.id,
-          name: patient.name,
-          uhid: patient.uhid,
-          age: patient.age,
-          gender: patient.gender,
-        }))}
         doctors={doctors}
         beds={beds}
       />

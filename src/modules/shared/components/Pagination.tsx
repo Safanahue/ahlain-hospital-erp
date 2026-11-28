@@ -5,13 +5,14 @@ function buildHref(
   basePath: string,
   query: Record<string, string | undefined>,
   page: number,
+  pageParam: string,
 ): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value) params.set(key, value);
   }
-  if (page > 1) params.set("page", String(page));
-  else params.delete("page");
+  if (page > 1) params.set(pageParam, String(page));
+  else params.delete(pageParam);
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }
@@ -23,6 +24,7 @@ export default function Pagination({
   totalPages,
   total,
   pageSize,
+  pageParam = "page",
 }: {
   basePath: string;
   query: Record<string, string | undefined>;
@@ -30,6 +32,9 @@ export default function Pagination({
   totalPages: number;
   total: number;
   pageSize: number;
+  /** Query key used for the page number; use a distinct key when a page has
+   *  more than one independently paginated table. */
+  pageParam?: string;
 }) {
   if (total === 0) return null;
 
@@ -47,7 +52,7 @@ export default function Pagination({
           Page {page} of {totalPages}
         </span>
         <Link
-          href={buildHref(basePath, query, page - 1)}
+          href={buildHref(basePath, query, page - 1, pageParam)}
           aria-disabled={page <= 1}
           tabIndex={page <= 1 ? -1 : undefined}
           className={`inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium ${
@@ -60,7 +65,7 @@ export default function Pagination({
           Previous
         </Link>
         <Link
-          href={buildHref(basePath, query, page + 1)}
+          href={buildHref(basePath, query, page + 1, pageParam)}
           aria-disabled={page >= totalPages}
           tabIndex={page >= totalPages ? -1 : undefined}
           className={`inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium ${

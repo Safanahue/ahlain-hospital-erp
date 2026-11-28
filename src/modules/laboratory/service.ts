@@ -11,10 +11,12 @@ import {
   updateLabOrderSchema,
   createRefRangeSchema,
   updateRefRangeSchema,
+  labOrderListQuerySchema,
   type CreateLabOrderInput,
   type UpdateLabOrderInput,
   type CreateRefRangeInput,
   type UpdateRefRangeInput,
+  type LabOrderListQuery,
 } from "./schemas";
 
 async function assertCanAccessLab(actor: User) {
@@ -40,71 +42,221 @@ export async function createLabOrder(
   await assertCanAccessLab(actor);
   const input = createLabOrderSchema.parse(rawInput);
 
-  return prisma.$transaction(async (tx) => {
-    const year = new Date().getFullYear();
-    const seqNo = await nextSequence(tx, "LAB", year);
+  const tests = input.tests?.length
+    ? input.tests
+    : [
+        {
+          testName: (input.testName ?? "").trim(),
+          sampleType: input.sampleType,
+          department: input.department,
+          priceRupees: input.costRupees,
+          testCode: undefined,
+          templateId: null as string | null | undefined,
+        },
+      ];
 
-    const order = await tx.labOrder.create({
-      data: {
-        orderNo: labOrderNo(year, seqNo),
-        patientId: input.patientId,
-        orderedById: input.orderedById,
-        testName: input.testName,
-        sampleType: input.sampleType || null,
-        costPaise: Math.round(input.costRupees * 100),
-        status: "ORDERED",
-      },
-      include: {
-        patient: { select: { id: true, name: true, uhid: true, phone: true } },
-        orderedBy: { select: { id: true, name: true } },
-      },
-    });
+  return prisma.$transaction(
+    async (tx) => {
+      const patient = await tx.patient.findUnique({ where: { id: input.patientId } });
+      if (!patient) throw new ApiError(404, "Patient not found");
 
-    await writeAuditLog(tx, {
-      userId: actor.id,
-      action: "LAB_ORDER_CREATED",
-      entity: "LabOrder",
-      entityId: order.id,
-      before: null,
-      after: {
-        id: order.id,
-        orderNo: order.orderNo,
-        patientId: order.patientId,
-        testName: order.testName,
-        status: order.status,
-      },
-    });
+      const year = new Date().getFullYear();
+      const seqNo = await nextSequence(tx, "LAB", year);
+      const orderNo = labOrderNo(year, seqNo);
 
-    return order;
-  });
+      const priced = tests.map((test) => ({
+        ...test,
+        pricePaise: Math.round(test.priceRupees * 100),
+      }));
+      const totalPaise = priced.reduce((sum, test) => sum + test.pricePaise, 0);
+      const department = input.department || priced[0]?.department || null;
+      const label = priced.map((test) => test.testName).join(", ").slice(0, 240);
+
+      // One LAB invoice per accession, raised inside the same transaction so a
+      // failed registration can never leave a bill behind.
+      let invoiceId: string | null = null;
+      if (input.raiseInvoice && totalPaise > 0) {
+        const invoiceNo = `INV-${year}-${String(
+          await nextSequence(tx, "INVOICE", year),
+        ).padStart(5, "0")}`;
+        const invoice = await tx.invoice.create({
+          data: {
+            invoiceNo,
+            patientId: patient.id,
+            department: "LAB",
+            billType: "GENERAL",
+            status: "UNPAID",
+            totalAmount: totalPaise,
+            paidAmount: 0,
+            createdBy: actor.id,
+            items: {
+              create: priced.map((test) => ({
+                category: "LABORATORY" as const,
+                description: `${test.testName} (${orderNo})`,
+                amount: test.pricePaise,
+              })),
+            },
+          },
+        });
+        invoiceId = invoice.id;
+        await writeAuditLog(tx, {
+          userId: actor.id,
+          action: "INVOICE_CREATED",
+          entity: "Invoice",
+          entityId: invoice.id,
+          after: {
+            invoiceNo,
+            patientUhid: patient.uhid,
+            department: "LAB",
+            totalAmount: totalPaise,
+            labOrderNo: orderNo,
+          },
+        });
+      }
+
+      const order = await tx.labOrder.create({
+        data: {
+          orderNo,
+          reportNo: orderNo,
+          patientId: input.patientId,
+          orderedById: input.orderedById,
+          testName: label,
+          sampleType: input.sampleType || priced[0]?.sampleType || null,
+          sampleId: input.sampleId || null,
+          department,
+          priority: input.priority,
+          costPaise: totalPaise,
+          status: "ORDERED",
+          findings: input.notes?.trim() || null,
+          templateId: priced.find((test) => test.templateId)?.templateId ?? null,
+          invoiceId,
+          tests: {
+            create: priced.map((test, index) => ({
+              testName: test.testName,
+              testCode: test.testCode?.trim() || null,
+              department: test.department || department,
+              sampleType: test.sampleType || input.sampleType || null,
+              pricePaise: test.pricePaise,
+              sortOrder: index,
+            })),
+          },
+        },
+        include: {
+          patient: { select: { id: true, name: true, uhid: true, phone: true } },
+          orderedBy: { select: { id: true, name: true } },
+          tests: { orderBy: { sortOrder: "asc" } },
+          invoice: { select: { id: true, invoiceNo: true, totalAmount: true, status: true } },
+        },
+      });
+
+      await writeAuditLog(tx, {
+        userId: actor.id,
+        action: "LAB_ORDER_CREATED",
+        entity: "LabOrder",
+        entityId: order.id,
+        before: null,
+        after: {
+          id: order.id,
+          orderNo: order.orderNo,
+          patientId: order.patientId,
+          tests: priced.map((test) => test.testName),
+          totalPaise,
+          invoiceNo: order.invoice?.invoiceNo ?? null,
+          status: order.status,
+        },
+      });
+
+      return order;
+    },
+    { timeout: 15_000 },
+  );
 }
 
-export async function listLabOrders(
-  range?: { gte: Date; lt: Date },
-  options?: { take?: number },
-) {
-  return prisma.labOrder.findMany({
-    ...(range ? { where: { createdAt: range } } : {}),
-    ...(options?.take ? { take: options.take } : {}),
-    orderBy: { createdAt: "desc" },
-    include: {
-      patient: { select: { id: true, name: true, uhid: true, phone: true, age: true, gender: true } },
-      orderedBy: { select: { id: true, name: true } },
-      verifiedBy: { select: { id: true, name: true } },
-      template: { select: { id: true, name: true, category: true } },
-      results: {
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          parameterName: true,
-          resultValue: true,
-          unit: true,
-          referenceRange: true,
-          flag: true,
-        },
-      },
+const LAB_ORDER_INCLUDE = {
+  patient: { select: { id: true, name: true, uhid: true, phone: true, age: true, gender: true } },
+  orderedBy: { select: { id: true, name: true } },
+  verifiedBy: { select: { id: true, name: true } },
+  template: { select: { id: true, name: true, category: true } },
+  invoice: { select: { id: true, invoiceNo: true, totalAmount: true, paidAmount: true, status: true } },
+  tests: { orderBy: { sortOrder: "asc" as const } },
+  results: {
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+    select: {
+      id: true,
+      parameterName: true,
+      resultValue: true,
+      unit: true,
+      referenceRange: true,
+      flag: true,
     },
-  });
+  },
+};
+
+/**
+ * Lab register. By default every accession is listed — historical orders are
+ * never hidden behind an implicit "today" filter.
+ */
+export async function listLabOrders(query: LabOrderListQuery = { page: 1, pageSize: 20 }) {
+  const { page, pageSize, q, status, department, from, to } = labOrderListQuerySchema.parse(query);
+  const where: Prisma.LabOrderWhereInput = {};
+
+  if (status && status !== "ALL") where.status = status;
+  if (department && department !== "ALL") where.department = department;
+  if (from || to) {
+    where.createdAt = {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+    };
+  }
+  if (q?.trim()) {
+    const term = q.trim();
+    where.OR = [
+      { orderNo: { contains: term, mode: "insensitive" } },
+      { reportNo: { contains: term, mode: "insensitive" } },
+      { sampleId: { contains: term, mode: "insensitive" } },
+      { testName: { contains: term, mode: "insensitive" } },
+      { patient: { name: { contains: term, mode: "insensitive" } } },
+      { patient: { uhid: { contains: term, mode: "insensitive" } } },
+      { patient: { phone: { contains: term } } },
+    ];
+  }
+
+  const [total, items] = await Promise.all([
+    prisma.labOrder.count({ where }),
+    prisma.labOrder.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: LAB_ORDER_INCLUDE,
+    }),
+  ]);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/** Dashboard counters for the lab module (all-time unless a range is given). */
+export async function getLabStats() {
+  const [total, ordered, collected, resultEntered, verified, cancelled, pendingBilling] =
+    await Promise.all([
+      prisma.labOrder.count(),
+      prisma.labOrder.count({ where: { status: "ORDERED" } }),
+      prisma.labOrder.count({ where: { status: "SAMPLE_COLLECTED" } }),
+      prisma.labOrder.count({ where: { status: "RESULT_ENTERED" } }),
+      prisma.labOrder.count({ where: { status: "VERIFIED" } }),
+      prisma.labOrder.count({ where: { status: "CANCELLED" } }),
+      prisma.labOrder.count({
+        where: { invoice: { status: { in: ["UNPAID", "PARTIALLY_PAID"] } } },
+      }),
+    ]);
+
+  return { total, ordered, collected, resultEntered, verified, cancelled, pendingBilling };
 }
 
 export async function getLabOrder(id: string) {
@@ -115,6 +267,11 @@ export async function getLabOrder(id: string) {
       orderedBy: true,
       verifiedBy: true,
       template: true,
+      tests: { orderBy: { sortOrder: "asc" } },
+      invoice: { select: { id: true, invoiceNo: true, totalAmount: true, paidAmount: true, status: true } },
+      documents: {
+        select: { id: true, filename: true, reportNo: true, reportDate: true, matchConfidence: true },
+      },
       results: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
     },
   });
@@ -141,22 +298,45 @@ export async function updateLabOrder(
     };
 
     if (input.sampleType !== undefined) data.sampleType = input.sampleType || null;
+    if (input.sampleId !== undefined) data.sampleId = input.sampleId || null;
     if (input.resultValue !== undefined) data.resultValue = input.resultValue || null;
     if (input.referenceRange !== undefined) data.referenceRange = input.referenceRange || null;
     if (input.findings !== undefined) data.findings = input.findings || null;
+    if (input.rejectionReason !== undefined) {
+      data.sampleRejectionReason = input.rejectionReason || null;
+      data.sampleRejectedAt = input.rejectionReason ? new Date() : null;
+    }
 
     if (input.status === "SAMPLE_COLLECTED" && !before.sampleCollectedAt) {
       data.sampleCollectedAt = new Date();
+      data.sampleCollectedBy = actor.name;
+      data.sampleRejectedAt = null;
+      data.sampleRejectionReason = null;
     }
 
     if (input.status === "VERIFIED") {
       data.verifiedById = actor.id;
       data.verifiedAt = new Date();
+      data.reportNo = before.reportNo ?? before.orderNo;
     }
 
     const updated = await tx.labOrder.update({
       where: { id },
       data,
+    });
+
+    await tx.labOrderTest.updateMany({
+      where: { orderId: id },
+      data: {
+        status:
+          input.status === "VERIFIED"
+            ? "VERIFIED"
+            : input.status === "RESULT_ENTERED"
+              ? "RESULT_ENTERED"
+              : input.status === "CANCELLED"
+                ? "CANCELLED"
+                : "ORDERED",
+      },
     });
 
     await writeAuditLog(tx, {

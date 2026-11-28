@@ -1,32 +1,137 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X, Pill } from "lucide-react";
-import PatientAutocomplete, { type PatientSearchResult } from "@/modules/patients/components/PatientAutocomplete";
+import { Plus, Trash2, X, Pill, Search, AlertCircle } from "lucide-react";
+import PatientAutocomplete, {
+  type PatientSearchResult,
+} from "@/modules/patients/components/PatientAutocomplete";
 
-interface Patient {
-  id: string;
-  name: string;
-  uhid: string;
-}
-
-interface Medicine {
+type PickedMedicine = {
   id: string;
   name: string;
   itemCode: string;
+  category: string;
   stockQuantity: number;
   unitPricePaise: number;
-  category: string;
+};
+
+type RxLine = {
+  medicineId: string;
+  name: string;
+  stock: number;
+  unitPricePaise: number;
+  quantity: number;
+  dosage: string;
+};
+
+function emptyLine(): RxLine {
+  return {
+    medicineId: "",
+    name: "",
+    stock: 0,
+    unitPricePaise: 0,
+    quantity: 1,
+    dosage: "",
+  };
 }
 
-export default function NewPrescriptionModal({
-  patients,
-  medicines,
+function MedicineSearch({
+  onPick,
+  disabled,
 }: {
-  patients: Patient[];
-  medicines: Medicine[];
+  onPick: (medicine: PickedMedicine) => void;
+  disabled?: boolean;
 }) {
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState<PickedMedicine[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (!open) return;
+
+    timer.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/pharmacy/medicines?view=picker&q=${encodeURIComponent(term)}`,
+        );
+        const data = await res.json();
+        setResults(res.ok ? (data.items ?? []) : []);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [term, open]);
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          className="input w-full pl-8 text-xs"
+          placeholder="Search medicine by name or item code..."
+          value={term}
+          disabled={disabled}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setTerm(e.target.value);
+            setOpen(true);
+          }}
+        />
+      </div>
+
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          {loading ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Searching...</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              No medicine found. Add it to the catalogue first.
+            </p>
+          ) : (
+            results.map((medicine) => (
+              <button
+                key={medicine.id}
+                type="button"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                onClick={() => {
+                  onPick(medicine);
+                  setTerm("");
+                  setOpen(false);
+                }}
+              >
+                <span>
+                  <span className="block font-medium text-slate-800 dark:text-slate-100">
+                    {medicine.name}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {medicine.itemCode}
+                  </span>
+                </span>
+                <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+                  {medicine.stockQuantity} in stock · ₹
+                  {(medicine.unitPricePaise / 100).toFixed(2)}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function NewPrescriptionModal() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,59 +141,37 @@ export default function NewPrescriptionModal({
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
   const [prescribedBy, setPrescribedBy] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [items, setItems] = useState<RxLine[]>([emptyLine()]);
 
-  const [items, setItems] = useState<
-    Array<{ medicineId: string; quantity: number; dosage: string }>
-  >([
-    {
-      medicineId: medicines[0]?.id || "",
-      quantity: 1,
-      dosage: "1-0-1 After food (5 days)",
-    },
-  ]);
-
-  const addItem = () => {
-    setItems([
-      ...items,
-      {
-        medicineId: medicines[0]?.id || "",
-        quantity: 1,
-        dosage: "1-0-1 After food",
-      },
-    ]);
+  const reset = () => {
+    setPatientId("");
+    setSelectedPatient(null);
+    setPrescribedBy("");
+    setInstructions("");
+    setItems([emptyLine()]);
+    setError(null);
   };
 
-  const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+  const updateLine = (index: number, patch: Partial<RxLine>) => {
+    setItems((current) =>
+      current.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    );
   };
 
-  const updateItem = (index: number, field: string, value: any) => {
-    const updated = [...items];
-    (updated[index] as any)[field] = value;
-    setItems(updated);
-  };
+  const totalRupees = items.reduce(
+    (sum, line) => sum + (line.unitPricePaise / 100) * (line.quantity || 0),
+    0,
+  );
 
-  // Calculate estimated total
-  const totalRupees = items.reduce((sum, it) => {
-    const med = medicines.find((m) => m.id === it.medicineId);
-    if (!med) return sum;
-    return sum + (med.unitPricePaise / 100) * it.quantity;
-  }, 0);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!patientId) {
-      setError("Please select a patient");
-      return;
-    }
-    if (items.length === 0) {
-      setError("Please add at least one medicine item");
-      return;
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!patientId) return setError("Select a patient");
+    if (items.some((line) => !line.medicineId)) {
+      return setError("Add at least one medicine to the prescription");
     }
 
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch("/api/pharmacy/prescriptions", {
         method: "POST",
@@ -97,30 +180,21 @@ export default function NewPrescriptionModal({
           patientId,
           prescribedBy,
           instructions,
-          items,
+          items: items.map((line) => ({
+            medicineId: line.medicineId,
+            quantity: line.quantity,
+            dosage: line.dosage,
+          })),
         }),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to create prescription");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to create prescription");
 
+      reset();
       setOpen(false);
-      setPatientId("");
-      setSelectedPatient(null);
-      setPrescribedBy("");
-      setInstructions("");
-      setItems([
-        {
-          medicineId: medicines[0]?.id || "",
-          quantity: 1,
-          dosage: "1-0-1 After food",
-        },
-      ]);
       router.refresh();
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -138,10 +212,10 @@ export default function NewPrescriptionModal({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-teal-50 dark:bg-teal-950 p-2 text-teal-600 dark:text-teal-400">
+                <div className="rounded-lg bg-teal-50 p-2 text-teal-600 dark:bg-teal-950 dark:text-teal-400">
                   <Pill className="h-5 w-5" />
                 </div>
                 <div>
@@ -149,20 +223,22 @@ export default function NewPrescriptionModal({
                     Write Doctor Prescription
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Assign medications, dosages, and queue for pharmacy dispensing
+                    Queue medicines for the pharmacy counter — stock is deducted when they are dispensed
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {error && (
-              <div className="mt-3 rounded-lg bg-danger-bg p-3 text-sm text-danger border border-red-200">
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-danger-bg p-3 text-sm text-danger">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 {error}
               </div>
             )}
@@ -177,7 +253,6 @@ export default function NewPrescriptionModal({
                     <PatientAutocomplete
                       id="rx-patient"
                       selectedPatient={selectedPatient}
-                      initialPatients={patients as PatientSearchResult[]}
                       onSelect={(p) => {
                         setSelectedPatient(p);
                         setPatientId(p?.id ?? "");
@@ -200,15 +275,14 @@ export default function NewPrescriptionModal({
                 </div>
               </div>
 
-              {/* Medicine Line Items */}
-              <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-slate-50/50 dark:bg-slate-800/20">
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/20">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                     Prescribed Medications ({items.length})
                   </h4>
                   <button
                     type="button"
-                    onClick={addItem}
+                    onClick={() => setItems((current) => [...current, emptyLine()])}
                     className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400"
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -216,26 +290,35 @@ export default function NewPrescriptionModal({
                   </button>
                 </div>
 
-                {items.map((it, idx) => {
-                  const selMed = medicines.find((m) => m.id === it.medicineId);
-                  return (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-12 gap-2 items-end bg-white dark:bg-slate-900 p-2.5 rounded-md border border-slate-200 dark:border-slate-700 text-xs"
-                    >
-                      <div className="col-span-5">
+                {items.map((line, index) => (
+                  <div
+                    key={index}
+                    className="rounded-md border border-slate-200 bg-white p-2.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <div className="grid grid-cols-12 items-end gap-2">
+                      <div className="col-span-7">
                         <label className="text-[11px] text-slate-500">Medicine</label>
-                        <select
-                          value={it.medicineId}
-                          onChange={(e) => updateItem(idx, "medicineId", e.target.value)}
-                          className="input mt-0.5 w-full text-xs"
-                        >
-                          {medicines.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} ({m.stockQuantity} in stock) - ₹{(m.unitPricePaise / 100).toFixed(2)}
-                            </option>
-                          ))}
-                        </select>
+                        {line.medicineId ? (
+                          <div className="mt-0.5 flex items-center justify-between rounded-md border border-slate-200 px-2 py-1.5 dark:border-slate-700">
+                            <span className="font-medium">{line.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {line.stock} in stock
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5">
+                            <MedicineSearch
+                              onPick={(medicine) =>
+                                updateLine(index, {
+                                  medicineId: medicine.id,
+                                  name: medicine.name,
+                                  stock: medicine.stockQuantity,
+                                  unitPricePaise: medicine.unitPricePaise,
+                                })
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
 
                       <div className="col-span-2">
@@ -243,42 +326,56 @@ export default function NewPrescriptionModal({
                         <input
                           type="number"
                           min="1"
-                          max={selMed?.stockQuantity || 999}
-                          value={it.quantity}
-                          onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)}
+                          max={line.stock || undefined}
+                          value={line.quantity}
+                          onChange={(e) =>
+                            updateLine(index, {
+                              quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                            })
+                          }
                           className="input mt-0.5 w-full text-xs"
                         />
                       </div>
 
-                      <div className="col-span-4">
-                        <label className="text-[11px] text-slate-500">Dosage Instructions</label>
+                      <div className="col-span-3">
+                        <label className="text-[11px] text-slate-500">Dosage</label>
                         <input
                           type="text"
-                          placeholder="e.g. 1-0-1 after food"
-                          value={it.dosage}
-                          onChange={(e) => updateItem(idx, "dosage", e.target.value)}
+                          placeholder="1-0-1 after food"
+                          value={line.dosage}
+                          onChange={(e) => updateLine(index, { dosage: e.target.value })}
                           className="input mt-0.5 w-full text-xs"
                         />
                       </div>
-
-                      <div className="col-span-1 flex justify-center pb-1">
-                        {items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeItem(idx)}
-                            className="text-slate-400 hover:text-danger"
-                            title="Remove item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
                     </div>
-                  );
-                })}
 
-                <div className="flex justify-between items-center pt-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-                  <span>Estimated Total Amount:</span>
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground">
+                        {line.stock > 0 && line.quantity > line.stock
+                          ? `Only ${line.stock} in stock — reduce the quantity or the dispense will be blocked`
+                          : `Line amount: ₹${(
+                              (line.unitPricePaise / 100) *
+                              (line.quantity || 0)
+                            ).toFixed(2)}`}
+                      </span>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setItems((current) => current.filter((_, i) => i !== index))
+                          }
+                          className="text-slate-400 hover:text-danger"
+                          title="Remove item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between pt-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <span>Estimated total amount:</span>
                   <span className="text-sm font-bold text-teal-600 dark:text-teal-400">
                     ₹{totalRupees.toFixed(2)}
                   </span>
@@ -298,7 +395,7 @@ export default function NewPrescriptionModal({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -307,11 +404,7 @@ export default function NewPrescriptionModal({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn btn-primary text-sm"
-                >
+                <button type="submit" className="btn btn-primary text-sm" disabled={loading}>
                   {loading ? "Creating..." : "Issue Prescription"}
                 </button>
               </div>

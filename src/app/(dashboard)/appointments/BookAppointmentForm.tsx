@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, Clock, Loader2, Plus, Stethoscope, User, FileText } from "lucide-react";
 import PatientAutocomplete, { type PatientSearchResult } from "@/modules/patients/components/PatientAutocomplete";
 
-type PatientOption = { id: string; name: string; uhid: string };
 type DoctorOption = { id: string; name: string };
 
 export default function BookAppointmentForm({
-  patients,
   doctors,
 }: {
-  patients: PatientOption[];
   doctors: DoctorOption[];
 }) {
   const router = useRouter();
@@ -108,7 +105,6 @@ export default function BookAppointmentForm({
               <PatientAutocomplete
                 id="apt-patient"
                 selectedPatient={selectedPatient}
-                initialPatients={patients as PatientSearchResult[]}
                 onSelect={(p) => {
                   setSelectedPatient(p);
                   setPatientId(p?.id ?? "");

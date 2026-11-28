@@ -51,10 +51,21 @@ export default function LabOrderActions({
   }
 
   const reportLink = (
-    <Link href={`/laboratory/${orderId}/report`} className="btn btn-secondary btn-sm">
-      <FileText className="h-3.5 w-3.5" aria-hidden />
-      Report
-    </Link>
+    <span className="inline-flex items-center gap-1.5">
+      <Link href={`/laboratory/${orderId}/report`} className="btn btn-secondary btn-sm">
+        <FileText className="h-3.5 w-3.5" aria-hidden />
+        Report
+      </Link>
+      <a
+        href={`/api/laboratory/orders/${orderId}/pdf`}
+        target="_blank"
+        rel="noreferrer"
+        className="btn btn-secondary btn-sm"
+        title="Open the generated PDF report"
+      >
+        PDF
+      </a>
+    </span>
   );
 
   if (currentStatus === "CANCELLED") return null;

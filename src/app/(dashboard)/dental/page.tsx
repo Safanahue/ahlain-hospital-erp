@@ -62,13 +62,8 @@ export default async function DentalPage({
   const toKey = isValidDateKey(first(sp.to)) ? (first(sp.to) as string) : fromKey;
   const hasDateFilter = Boolean(first(sp.from) || first(sp.to));
 
-  const [encounters, patients, dentists, dentalServices] = await Promise.all([
+  const [encounters, dentists, dentalServices] = await Promise.all([
     listDentalEncounters(hasDateFilter ? hospitalRange(fromKey, toKey) : undefined),
-    prisma.patient.findMany({
-      take: 100,
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, uhid: true },
-    }),
     prisma.user.findMany({
       where: { role: "DOCTOR", active: true },
       orderBy: { name: "asc" },
@@ -141,7 +136,6 @@ export default async function DentalPage({
 
       {/* New Dental Encounter Form */}
       <NewDentalEncounterForm
-        patients={patients}
         dentists={dentists}
         catalogServices={dentalServices}
       />

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { buildPatientSearchFilter } from "@/modules/patients/search-filter";
 import {
   hospitalRange,
   localDateKey,
@@ -65,15 +66,9 @@ const patientSelect = {
 } satisfies Prisma.PatientSelect;
 
 function patientSearch(q?: string): Prisma.PatientWhereInput | undefined {
-  const term = q?.trim();
-  if (!term) return undefined;
-  return {
-    OR: [
-      { name: { contains: term, mode: "insensitive" } },
-      { uhid: { contains: term, mode: "insensitive" } },
-      { phone: { contains: term } },
-    ],
-  };
+  // Shared tokenised matching: partial names, any part of the name, UHID/phone.
+  const filter = buildPatientSearchFilter(q);
+  return Object.keys(filter).length > 0 ? filter : undefined;
 }
 
 /** Doctor scoping for admission rows (admitting or attending). */
@@ -94,7 +89,7 @@ async function loadRegistration(f: Filters): Promise<ActivityRow[]> {
     where: { createdAt: range, ...(ps ?? {}) },
     select: { ...patientSelect, createdAt: true },
     orderBy: { createdAt: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return patients.map((p) => ({
     key: `registration:${p.id}`,
@@ -133,7 +128,7 @@ async function loadOp(f: Filters): Promise<ActivityRow[]> {
       doctor: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return visits.map((v) => ({
     key: `op:${v.id}`,
@@ -175,7 +170,7 @@ async function loadIp(f: Filters): Promise<ActivityRow[]> {
       attendingDoctor: { select: { name: true } },
     },
     orderBy: { admissionDate: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return admissions.map((a) => ({
     key: `ip:${a.id}`,
@@ -214,7 +209,7 @@ async function loadAppointments(f: Filters): Promise<ActivityRow[]> {
       doctor: { select: { name: true } },
     },
     orderBy: { slot: "asc" },
-    take: 2000,
+    take: 20000,
   });
   return appointments.map((a) => ({
     key: `appointment:${a.id}`,
@@ -254,7 +249,7 @@ async function loadLab(f: Filters): Promise<ActivityRow[]> {
       orderedBy: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return orders.map((o) => ({
     key: `lab:${o.id}`,
@@ -290,7 +285,7 @@ async function loadBilling(f: Filters): Promise<ActivityRow[]> {
       patient: { select: patientSelect },
     },
     orderBy: { createdAt: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return invoices.map((i) => ({
     key: `billing:${i.id}`,
@@ -331,7 +326,7 @@ async function loadDischarge(f: Filters): Promise<ActivityRow[]> {
       attendingDoctor: { select: { name: true } },
     },
     orderBy: { dischargeDate: "desc" },
-    take: 2000,
+    take: 20000,
   });
   return admissions.map((a) => ({
     key: `discharge:${a.id}`,
@@ -425,14 +420,9 @@ export async function getDateWiseActivities(
       ? (Object.keys(LOADERS) as ActivityKindName[])
       : [kind];
 
-  // Fetch enough rows per kind to cover the requested page after merging.
-  const perKindTake = Math.max(200, page * pageSize);
-  const batches = await Promise.all(
-    kinds.map(async (k) => {
-      const rows = await LOADERS[k](filters);
-      return rows.slice(0, perKindTake);
-    }),
-  );
+  // Rows are merged in memory (server-side only) so the totals stay exact
+  // across activity kinds. Each loader is bounded by take=20000.
+  const batches = await Promise.all(kinds.map((k) => LOADERS[k](filters)));
 
   const merged = batches.flat().sort((a, b) => b.at.getTime() - a.at.getTime());
   const total = merged.length;

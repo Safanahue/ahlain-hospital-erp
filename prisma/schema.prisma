@@ -228,6 +228,7 @@ model Patient {
   opVisits         OPVisit[]
   dentalEncounters DentalEncounter[]
   labOrders        LabOrder[]
+  labDocuments     LabReportDocument[]
   prescriptions    Prescription[]
   admissions       Admission[]
 
@@ -272,6 +273,8 @@ model Invoice {
 
   // Wave 3 — IP discharge billing (set by the discharge workflow)
   admission Admission?
+  // Lab order billed by this invoice (one invoice per accession)
+  labOrder LabOrder?
 
   @@index([status])
   @@index([patientId, createdAt])
@@ -540,7 +543,7 @@ model LabOrder {
   orderNo           String    @unique // e.g. AH-LAB-2026-0001
   patientId         String
   orderedById       String
-  testName          String // e.g. Full Blood Count, Lipid Profile, Thyroid Panel
+  testName          String // primary/legacy test label (first test of the accession)
   sampleType        String? // e.g. Blood, Urine, Sputum, Swab
   sampleCollectedAt DateTime?
   resultValue       String? // Diagnostic readings, values & units
@@ -551,6 +554,18 @@ model LabOrder {
   verifiedById      String?
   verifiedAt        DateTime?
   templateId        String? // report preset used for structured results
+  // Wave 14 — lab workflow, sample tracking & historical import
+  department        String? // Haematology | Biochemistry | Serology | ...
+  priority          String    @default("ROUTINE") // ROUTINE | URGENT | STAT
+  sampleId          String? // barcode / vial identifier used on the bench
+  sampleCollectedBy String?
+  sampleRejectedAt  DateTime?
+  sampleRejectionReason String?
+  reportNo          String? // printed report number (defaults to orderNo)
+  invoiceId         String?   @unique // LAB invoice raised for this accession
+  sourceSystem      String? // e.g. XPERTZ_MK1 — null for orders created in Ahlain
+  sourceRef         String?   @unique // stable source key, prevents duplicate imports
+  sourceTable       String? // originating source table, e.g. heamatology
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -559,11 +574,15 @@ model LabOrder {
   verifiedBy User?              @relation("LabOrderVerifiedBy", fields: [verifiedById], references: [id])
   template   LabReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   results    LabOrderResult[]
+  tests      LabOrderTest[]
+  documents  LabReportDocument[]
+  invoice    Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([patientId])
   @@index([orderedById])
   @@index([status])
   @@index([createdAt])
+  @@index([department])
 }
 
 /**
@@ -658,6 +677,9 @@ model PrescriptionItem {
   unitPricePaise Int     @default(0)
   totalPaise     Int     @default(0)
   dosage         String? // e.g. "1-0-1 for 5 days"
+  // Wave 14 — partial dispensing & returns (additive; existing rows default to 0)
+  dispensedQuantity Int  @default(0)
+  returnedQuantity  Int  @default(0)
 
   prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   medicine     Medicine     @relation(fields: [medicineId], references: [id])
@@ -875,6 +897,58 @@ model LabTemplateRange {
  * Snapshot of an entered result for one lab order parameter. Values are copied
  * in so an issued report never changes when a preset is edited later.
  */
+/**
+ * One test inside a multi-test lab registration. The parent LabOrder is the
+ * accession (one patient, one collection event); each test carries its own
+ * department, tariff and workflow status.
+ */
+model LabOrderTest {
+  id          String  @id @default(cuid())
+  orderId     String
+  testName    String
+  testCode    String?
+  department  String?
+  sampleType  String?
+  pricePaise  Int     @default(0)
+  status      String  @default("ORDERED") // ORDERED | RESULT_ENTERED | VERIFIED | CANCELLED
+  sortOrder   Int     @default(0)
+
+  order LabOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, sortOrder])
+  @@index([testName])
+}
+
+/**
+ * Archived report file (scanned historical PDF or a generated report copy).
+ * Bytes live in PostgreSQL so they survive Render redeploys; files are only
+ * served through an authenticated route.
+ */
+model LabReportDocument {
+  id              String    @id @default(cuid())
+  patientId       String?
+  orderId         String? // matched current lab order, when confident
+  filename        String
+  sourceFolder    String? // e.g. new/LAB REPORTS
+  sha256          String    @unique
+  mimeType        String    @default("application/pdf")
+  sizeBytes       Int       @default(0)
+  reportNo        String?
+  reportDate      DateTime?
+  testName        String?
+  matchConfidence String    @default("UNMATCHED") // EXACT | PATIENT_DATE | UNMATCHED
+  matchNote       String?
+  bytes           Bytes
+  createdAt       DateTime  @default(now())
+
+  patient Patient?  @relation(fields: [patientId], references: [id])
+  order   LabOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([orderId])
+  @@index([reportNo])
+}
+
 model LabOrderResult {
   id             String   @id @default(cuid())
   orderId        String

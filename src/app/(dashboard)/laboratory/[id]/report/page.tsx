@@ -67,7 +67,17 @@ export default async function LabReportPage({ params }: { params: Promise<{ id: 
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Laboratory
         </Link>
-        <PrintActions />
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/laboratory/orders/${order.id}/pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-secondary btn-sm"
+          >
+            Download PDF
+          </a>
+          <PrintActions />
+        </div>
       </div>
 
       <DocumentSurface>

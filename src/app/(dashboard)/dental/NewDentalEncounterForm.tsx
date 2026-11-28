@@ -21,11 +21,9 @@ const DEFAULT_PROCEDURES = [
 ];
 
 export default function NewDentalEncounterForm({
-  patients,
   dentists,
   catalogServices = [],
 }: {
-  patients: PatientOption[];
   dentists: DentistOption[];
   catalogServices?: ServiceOption[];
 }) {
@@ -130,7 +128,6 @@ export default function NewDentalEncounterForm({
             <PatientAutocomplete
               id="dental-patient"
               selectedPatient={selectedPatient}
-              initialPatients={patients as PatientSearchResult[]}
               onSelect={(p) => {
                 setSelectedPatient(p);
                 setPatientId(p?.id ?? "");

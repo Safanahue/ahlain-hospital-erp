@@ -33,11 +33,9 @@ function todayInputValue() {
 }
 
 export default function NewAdmissionForm({
-  patients,
   doctors,
   beds,
 }: {
-  patients: PatientOption[];
   doctors: DoctorOption[];
   beds: BedOption[];
 }) {
@@ -142,7 +140,6 @@ export default function NewAdmissionForm({
               <PatientAutocomplete
                 id="ip-patient"
                 selectedPatient={selectedPatient}
-                initialPatients={patients as PatientSearchResult[]}
                 onSelect={(p) => {
                   setSelectedPatient(p);
                   setPatientId(p?.id ?? "");

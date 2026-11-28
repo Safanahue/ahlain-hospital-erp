@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Search,
   UserRound,
 } from "lucide-react";
 import {
@@ -38,6 +37,7 @@ import {
   getRangeKindCounts,
 } from "../date-activity";
 import ActivityCalendar from "./ActivityCalendar";
+import PeriodSearchInput from "./PeriodSearchInput";
 
 type SearchParams = {
   date?: string;
@@ -307,17 +307,7 @@ export default async function DateWiseSection({
                 <label htmlFor="dw-q" className="field-label">
                   Search in this period
                 </label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    id="dw-q"
-                    type="search"
-                    name="q"
-                    defaultValue={q ?? ""}
-                    placeholder="Patient name, UHID or phone"
-                    className="input w-full pl-9"
-                  />
-                </div>
+                <PeriodSearchInput defaultValue={q ?? ""} />
               </div>
 
               <div className="flex items-center gap-2">
